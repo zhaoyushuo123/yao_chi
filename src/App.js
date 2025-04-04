@@ -436,7 +436,7 @@ const EnvironmentCreateForm = () => {
             setActiveTemplate(template);
             setTemplateDescription(templateDescriptions[template] || '');
         }
-    }, [calculateNodeStats, form]);
+    }, [calculateNodeStats, form, templateDescriptions]);
 
     // 导出配置
     const exportConfig = useCallback(() => {
@@ -574,7 +574,7 @@ const EnvironmentCreateForm = () => {
 
         return (
             <Row gutter={16}>
-                <Col span={8}>
+                <Col span={12}>
                     <Form.Item
                         {...nodeRestField}
                         label="节点角色"
@@ -589,7 +589,7 @@ const EnvironmentCreateForm = () => {
                         </Select>
                     </Form.Item>
                 </Col>
-                <Col span={8}>
+                <Col span={12}>
                     <Form.Item
                         {...nodeRestField}
                         label="节点数量"
@@ -661,7 +661,6 @@ const EnvironmentCreateForm = () => {
     ));
 
     // 节点项组件
-    // 节点项组件
     const NodeItem = React.memo(({ nodeName, nodeRestField, nodeTypeOptions, businessType, form, clusterName, onRemove, vbsSeparateDeploy }) => {
         const nodeType = Form.useWatch(['clusterInfo', clusterName, 'nodeInfo', nodeName, 'nodeType'], form);
 
@@ -683,9 +682,8 @@ const EnvironmentCreateForm = () => {
 
         return (
             <div style={{ marginBottom: 8, padding: 8, background: '#f5f5f5', borderRadius: 4 }}>
-                <Row gutter={16} align="middle">
-                    {/* 节点大类 */}
-                    <Col span={4}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space align="baseline" style={{ marginBottom: 4 }}>
                         <Form.Item
                             {...nodeRestField}
                             name={[nodeName, 'nodeType']}
@@ -694,119 +692,14 @@ const EnvironmentCreateForm = () => {
                             labelCol={{ span: 24 }}
                             style={{ marginBottom: 0 }}
                         >
-                            <Select placeholder="选择节点大类" style={{ width: '100%' }}>
+                            <Select
+                                placeholder="选择节点大类"
+                                style={{ width: 200 }}
+                                onChange={resetNodeFields}
+                            >
                                 {nodeTypeOptions}
                             </Select>
                         </Form.Item>
-                    </Col>
-
-                    {nodeType === 'storage' && (
-                        <>
-                            {/* 存储节点角色 - 12列 */}
-                            <Col span={12}>
-                                <Form.Item
-                                    {...nodeRestField}
-                                    name={[nodeName, 'nodeRole']}
-                                    rules={[{ required: true, message: '请选择节点角色!' }]}
-                                    label="节点角色"
-                                    labelCol={{ span: 24 }}
-                                    style={{ marginBottom: 0 }}
-                                >
-                                    <Select placeholder="选择节点角色" style={{ width: '100%' }}>
-                                        {getNodeRoleOptions(businessType, vbsSeparateDeploy)}
-                                    </Select>
-                                </Form.Item>
-                            </Col>
-                            {/* 存储节点数量 - 精确右对齐 */}
-                            <Col span={6}>
-                                <div style={{
-                                    display: 'flex',
-                                    justifyContent: 'flex-end',
-                                    paddingRight: 8
-                                }}>
-                                    <Form.Item
-                                        {...nodeRestField}
-                                        name={[nodeName, 'nodeCount']}
-                                        rules={[{ required: true, message: '请输入节点数量!' }]}
-                                        label="节点数量"
-                                        labelCol={{ span: 24 }}
-                                        style={{ marginBottom: 0, width: '100%' }}
-                                    >
-                                        <InputNumber
-                                            placeholder="数量"
-                                            style={{
-                                                width: '100%',
-                                                textAlign: 'right'
-                                            }}
-                                            min={1}
-                                            max={100}
-                                        />
-                                    </Form.Item>
-                                </div>
-                            </Col>
-                        </>
-                    )}
-
-                    {nodeType === 'client' && (
-                        <>
-                            {/* 客户端业务服务 - 12列 */}
-                            <Col span={12}>
-                                <Form.Item
-                                    {...nodeRestField}
-                                    name={[nodeName, 'clientServices']}
-                                    rules={[{ required: true, message: '请选择业务服务!' }]}
-                                    label="业务服务"
-                                    labelCol={{ span: 24 }}
-                                    style={{ marginBottom: 0 }}
-                                >
-                                    <Space size={8} style={{ display: 'flex', alignItems: 'center' }}>
-                                        <Checkbox value="nfs">NFS</Checkbox>
-                                        <Checkbox value="obs">OBS</Checkbox>
-                                        <Checkbox value="dpc">DPC</Checkbox>
-                                        <Checkbox value="fi">FI</Checkbox>
-                                        <Checkbox value="hdfs_fi">
-                                            <Space size={4}>
-                                                HDFS_FI
-                                                <Tooltip title="HDFS_FI部署时，即使勾选了NFS OBS或DPC，也只有第三个FI客户端提供NFS OBS DPC协议">
-                                                    <QuestionCircleOutlined />
-                                                </Tooltip>
-                                            </Space>
-                                        </Checkbox>
-                                    </Space>
-                                </Form.Item>
-                            </Col>
-                            {/* 客户端节点数量 - 精确右对齐 */}
-                            <Col span={6}>
-                                <div style={{
-                                    display: 'flex',
-                                    justifyContent: 'flex-end',
-                                    paddingRight: 8
-                                }}>
-                                    <Form.Item
-                                        {...nodeRestField}
-                                        name={[nodeName, 'nodeCount']}
-                                        rules={[{ required: true, message: '请输入节点数量!' }]}
-                                        label="节点数量"
-                                        labelCol={{ span: 24 }}
-                                        style={{ marginBottom: 0, width: '100%' }}
-                                    >
-                                        <InputNumber
-                                            placeholder="数量"
-                                            style={{
-                                                width: '100%',
-                                                textAlign: 'right'
-                                            }}
-                                            min={1}
-                                            max={100}
-                                        />
-                                    </Form.Item>
-                                </div>
-                            </Col>
-                        </>
-                    )}
-
-                    {/* 删除按钮 */}
-                    <Col span={2}>
                         <Button
                             type="text"
                             danger
@@ -816,10 +709,21 @@ const EnvironmentCreateForm = () => {
                                 onRemove();
                             }}
                             size="small"
-                            style={{ marginTop: 24 }}
                         />
-                    </Col>
-                </Row>
+                    </Space>
+
+                    {nodeType === 'storage' && (
+                        <StorageNodeConfig
+                            nodeName={nodeName}
+                            nodeRestField={nodeRestField}
+                            businessType={businessType}
+                            vbsSeparateDeploy={vbsSeparateDeploy}
+                            form={form}
+                            clusterName={clusterName}
+                        />
+                    )}
+                    {nodeType === 'client' && <ClientNodeConfig nodeName={nodeName} nodeRestField={nodeRestField} />}
+                </Space>
             </div>
         );
     });
@@ -1012,7 +916,7 @@ const EnvironmentCreateForm = () => {
                 </Row>
 
                 <Row gutter={16} style={{ marginBottom: 8 }}>
-                    <Col span={8}>
+                    <Col span={12}>
                         <Form.Item
                             {...restField}
                             label="业务大类"
@@ -1027,7 +931,7 @@ const EnvironmentCreateForm = () => {
                             </Select>
                         </Form.Item>
                     </Col>
-                    <Col span={8}>
+                    <Col span={12}>
                         <Form.Item
                             {...restField}
                             label="平台"
@@ -1242,7 +1146,6 @@ const EnvironmentCreateForm = () => {
         const vbsSeparateDeploy = Form.useWatch(['clusterInfo', name, 'vbsSeparateDeploy'], form);
         const enableMetadata = Form.useWatch(['clusterInfo', name, 'enableMetadata'], form);
         const enableReplication = Form.useWatch(['clusterInfo', name, 'enableReplication'], form);
-        const enableTiering = Form.useWatch(['clusterInfo', name, 'enableTiering'], form);
 
         const hasStorageNode = useMemo(() => {
             const nodeInfo = form.getFieldValue(['clusterInfo', name, 'nodeInfo']);
@@ -1309,8 +1212,8 @@ const EnvironmentCreateForm = () => {
                                           removeFavorite
                                       }) => {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <Card title="典型配置" bodyStyle={{ padding: 12 }}>
+            <>
+                <Card title="典型配置" style={{ marginBottom: 12 }} bodyStyle={{ padding: 12 }}>
                     <Row gutter={[8, 8]}>
                         {templateButtons.map(template => (
                             <Col span={12} key={template}>
@@ -1329,6 +1232,7 @@ const EnvironmentCreateForm = () => {
 
                 <Card
                     title="用户收藏配置"
+                    style={{ marginBottom: 0 }}
                     bodyStyle={{ padding: 12 }}
                     extra={
                         <Space size="small">
@@ -1414,7 +1318,7 @@ const EnvironmentCreateForm = () => {
                         {templateDescription || '请选择典型配置查看详细描述'}
                     </div>
                 </Card>
-            </div>
+            </>
         );
     });
 
