@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, Select, Row, Col, message, Space, InputNumber, Checkbox, Card, Upload } from 'antd';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Form, Input, Button, Select, Row, Col, message, Space, InputNumber, Checkbox, Card, Upload, Modal } from 'antd';
 import { PlusOutlined, MinusCircleOutlined, UploadOutlined, StarOutlined, StarFilled, DownloadOutlined } from '@ant-design/icons';
 
 const { Option } = Select;
@@ -10,6 +10,8 @@ const EnvironmentCreateForm = () => {
     const [favoriteConfigs, setFavoriteConfigs] = useState([]);
     const [activeTemplate, setActiveTemplate] = useState(null);
     const [nodeStats, setNodeStats] = useState([]);
+    const [isFavoriteModalVisible, setIsFavoriteModalVisible] = useState(false);
+    const [favoriteName, setFavoriteName] = useState('');
 
     // 初始化默认展示一个集群
     useEffect(() => {
@@ -18,8 +20,8 @@ const EnvironmentCreateForm = () => {
                 clusterName: '',
                 businessType: undefined,
                 platform: undefined,
-                storageImage: undefined,  // 新增：存储镜像移到集群级别
-                clientImage: undefined,   // 新增：客户端镜像移到集群级别
+                storageImage: undefined,
+                clientImage: undefined,
                 nodeInfo: [{
                     nodeType: undefined
                 }]
@@ -68,46 +70,84 @@ const EnvironmentCreateForm = () => {
         setClusterCount(count);
         setNodeStats(calculateNodeStats(allValues));
 
-        // 处理业务类型变化为DME的情况
+        // 处理业务类型变化的情况
         if (changedValues.clusterInfo) {
             allValues.clusterInfo.forEach((cluster, clusterIndex) => {
-                if (changedValues.clusterInfo[clusterIndex]?.businessType === 'dme') {
-                    const updatedNodeInfo = (cluster.nodeInfo || []).filter(node => node?.nodeType === 'client');
-                    if (updatedNodeInfo.length !== (cluster.nodeInfo || []).length) {
+                const currentBusinessType = changedValues.clusterInfo[clusterIndex]?.businessType;
+                const prevBusinessType = form.getFieldValue(['clusterInfo', clusterIndex, 'businessType']);
+
+                if (currentBusinessType && currentBusinessType !== prevBusinessType) {
+                    const nodeInfo = form.getFieldValue(['clusterInfo', clusterIndex, 'nodeInfo']) || [];
+                    let nodesToRemove = [];
+
+                    if (currentBusinessType === 'block') {
+                        nodesToRemove = nodeInfo.filter(node => node?.nodeType === 'client');
+                    } else if (currentBusinessType === 'dme') {
+                        nodesToRemove = nodeInfo.filter(node => node?.nodeType === 'storage');
+                    }
+
+                    if (nodesToRemove.length > 0) {
+                        Modal.confirm({
+                            title: '确认切换业务类型?',
+                            content: `切换为${currentBusinessType.toUpperCase()}将移除${nodesToRemove.length}个不兼容的节点`,
+                            okText: '确认',
+                            cancelText: '取消',
+                            onOk: () => {
+                                const updatedNodeInfo = nodeInfo.filter(node =>
+                                    !nodesToRemove.includes(node)
+                                );
+                                form.setFieldsValue({
+                                    clusterInfo: {
+                                        [clusterIndex]: {
+                                            nodeInfo: updatedNodeInfo,
+                                            businessType: currentBusinessType
+                                        }
+                                    }
+                                });
+                                message.warning(
+                                    `已自动移除${nodesToRemove.length}个${currentBusinessType === 'block' ? '客户端' : '存储'}节点`
+                                );
+                            },
+                            onCancel: () => {
+                                // 取消则恢复原来的业务类型
+                                form.setFieldsValue({
+                                    clusterInfo: {
+                                        [clusterIndex]: {
+                                            businessType: prevBusinessType
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    } else {
+                        // 没有需要移除的节点，直接更新业务类型
                         form.setFieldsValue({
                             clusterInfo: {
                                 [clusterIndex]: {
-                                    nodeInfo: updatedNodeInfo
+                                    businessType: currentBusinessType
                                 }
                             }
                         });
-                        message.warning('DME业务只支持客户端节点，已自动移除非客户端节点');
                     }
                 }
             });
         }
     };
 
-    // 检查集群是否有存储节点
-    const hasStorageNode = (clusterIndex) => {
-        const nodeInfo = form.getFieldValue(['clusterInfo', clusterIndex, 'nodeInfo']);
-        return nodeInfo?.some(node => node?.nodeType === 'storage');
-    };
-
-    // 获取节点类型选项
     const getNodeTypeOptions = (businessType) => {
-        if (businessType === 'block') {
-            return [<Option key="storage" value="storage">存储</Option>];
-        } else if (businessType === 'dme') {
-            return [<Option key="client" value="client">客户端</Option>];
+        switch(businessType) {
+            case 'block':
+                return [<Option key="storage" value="storage">存储</Option>];
+            case 'dme':
+                return [<Option key="client" value="client">客户端</Option>];
+            default: // NAS或其他
+                return [
+                    <Option key="storage" value="storage">存储</Option>,
+                    <Option key="client" value="client">客户端</Option>
+                ];
         }
-        return [
-            <Option key="storage" value="storage">存储</Option>,
-            <Option key="client" value="client">客户端</Option>
-        ];
     };
 
-    // 获取存储镜像选项
     const getStorageImageOptions = (businessType) => {
         if (businessType === 'dme') {
             return [<Option key="euler12" value="euler12">Euler 12</Option>];
@@ -118,7 +158,6 @@ const EnvironmentCreateForm = () => {
         ];
     };
 
-    // 获取客户端镜像选项
     const getClientImageOptions = (businessType) => {
         if (businessType === 'dme') {
             return [<Option key="euler12" value="euler12">Euler 12</Option>];
@@ -129,7 +168,6 @@ const EnvironmentCreateForm = () => {
         ];
     };
 
-    // 应用配置模板
     const applyTemplate = (template, config) => {
         if (config) {
             form.setFieldsValue(config.configData);
@@ -142,31 +180,18 @@ const EnvironmentCreateForm = () => {
                 combinedEnvName: `${template}配置`
             };
 
-            // 模板配置逻辑
             switch(template) {
                 case '3NODE_1Client':
                     values.clusterInfo = [{
                         clusterName: '3节点存储集群',
                         businessType: 'nas',
                         platform: 'x86',
-                        storageImage: 'euler8',  // 修改：存储镜像移到集群级别
-                        clientImage: 'ubuntu',     // 修改：客户端镜像移到集群级别
+                        storageImage: 'euler8',
+                        clientImage: 'ubuntu',
                         nodeInfo: [
-                            {
-                                nodeType: 'storage',
-                                nodeRole: 'fsm',
-                                nodeCount: 2
-                            },
-                            {
-                                nodeType: 'storage',
-                                nodeRole: 'fsa',
-                                nodeCount: 1
-                            },
-                            {
-                                nodeType: 'client',
-                                clientServices: ['nfs'],
-                                nodeCount: 1
-                            }
+                            { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 2 },
+                            { nodeType: 'storage', nodeRole: 'fsa', nodeCount: 1 },
+                            { nodeType: 'client', clientServices: ['nfs'], nodeCount: 1 }
                         ],
                         diskInfo: [
                             { diskType: 'ssd', diskSize: 512, diskCount: 10 }
@@ -178,7 +203,36 @@ const EnvironmentCreateForm = () => {
                         }
                     }];
                     break;
-                // 其他模板配置...
+                case 'BLOCK_Template':
+                    values.clusterInfo = [{
+                        clusterName: 'BLOCK集群',
+                        businessType: 'block',
+                        platform: 'x86',
+                        storageImage: 'euler8',
+                        nodeInfo: [
+                            { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 3 }
+                        ],
+                        diskInfo: [
+                            { diskType: 'ssd', diskSize: 512, diskCount: 12 }
+                        ],
+                        networkInfo: {
+                            nicCount: 4,
+                            nicType: 'tcp',
+                            ipCount: 5
+                        }
+                    }];
+                    break;
+                case 'DME_Template':
+                    values.clusterInfo = [{
+                        clusterName: 'DME集群',
+                        businessType: 'dme',
+                        platform: 'x86',
+                        clientImage: 'euler12',
+                        nodeInfo: [
+                            { nodeType: 'client', clientServices: ['nfs'], nodeCount: 2 }
+                        ]
+                    }];
+                    break;
             }
 
             form.setFieldsValue(values);
@@ -188,7 +242,6 @@ const EnvironmentCreateForm = () => {
         }
     };
 
-    // 导出当前配置
     const exportConfig = () => {
         const values = form.getFieldsValue();
         const blob = new Blob([JSON.stringify(values, null, 2)], { type: 'application/json' });
@@ -202,7 +255,6 @@ const EnvironmentCreateForm = () => {
         URL.revokeObjectURL(url);
     };
 
-    // 导入配置
     const importConfig = (file) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -219,26 +271,37 @@ const EnvironmentCreateForm = () => {
         return false;
     };
 
-    // 收藏当前配置
     const saveAsFavorite = () => {
-        const values = form.getFieldsValue();
-        const configName = prompt('请输入配置名称:');
-        if (configName) {
-            const newFavorite = {
-                configName,
-                configData: values,
-                isFavorite: true,
-                timestamp: new Date().toISOString()
-            };
-
-            const updatedFavorites = [...favoriteConfigs, newFavorite];
-            setFavoriteConfigs(updatedFavorites);
-            localStorage.setItem('favoriteConfigs', JSON.stringify(updatedFavorites));
-            message.success('配置已收藏');
-        }
+        setIsFavoriteModalVisible(true);
     };
 
-    // 移除收藏
+    const handleFavoriteOk = () => {
+        if (!favoriteName.trim()) {
+            message.warning('请输入配置名称!');
+            return;
+        }
+
+        const values = form.getFieldsValue();
+        const newFavorite = {
+            configName: favoriteName,
+            configData: values,
+            isFavorite: true,
+            timestamp: new Date().toISOString()
+        };
+
+        const updatedFavorites = [...favoriteConfigs, newFavorite];
+        setFavoriteConfigs(updatedFavorites);
+        localStorage.setItem('favoriteConfigs', JSON.stringify(updatedFavorites));
+        message.success('配置已收藏');
+        setFavoriteName('');
+        setIsFavoriteModalVisible(false);
+    };
+
+    const handleFavoriteCancel = () => {
+        setIsFavoriteModalVisible(false);
+        setFavoriteName('');
+    };
+
     const removeFavorite = (index) => {
         const updatedFavorites = [...favoriteConfigs];
         updatedFavorites.splice(index, 1);
@@ -247,7 +310,6 @@ const EnvironmentCreateForm = () => {
         message.success('配置已移除收藏');
     };
 
-    // 切换收藏状态
     const toggleFavorite = (index) => {
         const updatedFavorites = [...favoriteConfigs];
         updatedFavorites[index].isFavorite = !updatedFavorites[index].isFavorite;
@@ -259,553 +321,465 @@ const EnvironmentCreateForm = () => {
         '3NODE_1Client', '3NODE_3Client', '3NODE_1DPC', '3NODE_3DPC',
         '6NODE_1Client', '9NODE_1Client', '9000纳管',
         '3NODE_1FI', '3NODE_HDFS_FI', '3NODE_CONVERGE_FI', '3NODE_CONVERGE_HDFS_FI',
-        '2DC', '3DC', '2GFS', '3GFS'
+        '2DC', '3DC', '2GFS', '3GFS', 'BLOCK_Template', 'DME_Template'
     ];
 
-    return (
-        <div style={{ display: 'flex', gap: 16 }}>
-            <div style={{ flex: 3 }}>
-                <Form
-                    form={form}
-                    name="createEnvironment"
-                    layout="vertical"
-                    onFinish={onFinish}
-                    onFinishFailed={onFinishFailed}
-                    autoComplete="off"
-                    onValuesChange={handleClusterChange}
+    const ClusterHeader = ({ clusterIndex, stats, onRemove }) => (
+        <div style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            background: '#f0f0f0',
+            padding: '2px 8px',
+            borderRadius: 4,
+            fontSize: 12
+        }}>
+            <span style={{ marginRight: 8 }}>集群 #{clusterIndex}</span>
+            <span style={{ marginRight: 8 }}>存储: {stats.storageCount}</span>
+            <span>客户端: {stats.clientCount}</span>
+            {onRemove && (
+                <MinusCircleOutlined
+                    style={{ fontSize: 14, color: '#ff4d4f', marginLeft: 8 }}
+                    onClick={onRemove}
+                />
+            )}
+        </div>
+    );
+
+    const StorageNodeConfig = ({ nodeName, nodeRestField }) => (
+        <Row gutter={16}>
+            <Col span={12}>
+                <Form.Item
+                    {...nodeRestField}
+                    label="节点角色"
+                    name={[nodeName, 'nodeRole']}
+                    rules={[{ required: true, message: '请选择节点角色!' }]}
                 >
-                    <h2 style={{ marginBottom: 12 }}>创建新环境</h2>
-                    <Form.List name="clusterInfo">
-                        {(fields, { add, remove }) => (
-                            <>
-                                {fields.map(({ key, name, ...restField }) => {
-                                    const businessType = form.getFieldValue(['clusterInfo', name, 'businessType']);
-                                    const showDiskInfo = hasStorageNode(name);
-                                    const nodeTypeOptions = getNodeTypeOptions(businessType);
-                                    const showNetworkInfo = hasStorageNode(name);
-                                    const currentStats = nodeStats[name] || { storageCount: 0, clientCount: 0 };
+                    <Select placeholder="选择节点角色">
+                        <Option value="fsm">FSM</Option>
+                        <Option value="fsa">FSA</Option>
+                    </Select>
+                </Form.Item>
+            </Col>
+            <Col span={12}>
+                <Form.Item
+                    {...nodeRestField}
+                    label="节点数量"
+                    name={[nodeName, 'nodeCount']}
+                    rules={[{ required: true, message: '请输入节点数量!', type: 'number', min: 1, max: 100 }]}
+                >
+                    <InputNumber placeholder="输入节点数量" style={{ width: '100%' }} min={1} max={100} />
+                </Form.Item>
+            </Col>
+        </Row>
+    );
 
-                                    return (
-                                        <div key={key} style={{
-                                            marginBottom: 12,
-                                            border: '1px solid #d9d9d9',
-                                            padding: 12,
-                                            borderRadius: 4,
-                                            position: 'relative'
-                                        }}>
-                                            {/* 集群计数和实时节点统计信息 */}
-                                            <div style={{
-                                                position: 'absolute',
-                                                top: 12,
-                                                right: 12,
-                                                background: '#f0f0f0',
-                                                padding: '2px 8px',
-                                                borderRadius: 4,
-                                                fontSize: 12
-                                            }}>
-                                                <span style={{ marginRight: 8 }}>集群 #{name + 1}</span>
-                                                <span style={{ marginRight: 8 }}>存储: {currentStats.storageCount}</span>
-                                                <span>客户端: {currentStats.clientCount}</span>
-                                            </div>
-
-                                            <Row gutter={16} style={{ marginBottom: 8 }}>
-                                                <Col span={24}>
-                                                    <Form.Item
-                                                        {...restField}
-                                                        label="集群名称"
-                                                        name={[name, 'clusterName']}
-                                                        rules={[{ required: true, message: '请输入集群名称!' }]}
-                                                        style={{ marginBottom: 8 }}
-                                                    >
-                                                        <Input placeholder="请输入集群名称" />
-                                                    </Form.Item>
-                                                </Col>
-                                            </Row>
-
-                                            <Row gutter={16} style={{ marginBottom: 8 }}>
-                                                <Col span={12}>
-                                                    <Form.Item
-                                                        {...restField}
-                                                        label="业务大类"
-                                                        name={[name, 'businessType']}
-                                                        rules={[{ required: true, message: '请选择业务大类!' }]}
-                                                        style={{ marginBottom: 8 }}
-                                                    >
-                                                        <Select placeholder="请选择业务大类">
-                                                            <Option value="block">Block</Option>
-                                                            <Option value="nas">NAS</Option>
-                                                            <Option value="dme">DME</Option>
-                                                        </Select>
-                                                    </Form.Item>
-                                                </Col>
-                                                <Col span={12}>
-                                                    <Form.Item
-                                                        {...restField}
-                                                        label="平台"
-                                                        name={[name, 'platform']}
-                                                        rules={[{ required: true, message: '请选择平台!' }]}
-                                                        style={{ marginBottom: 8 }}
-                                                    >
-                                                        <Select placeholder="请选择平台">
-                                                            <Option value="x86">x86</Option>
-                                                            <Option value="arm">ARM</Option>
-                                                        </Select>
-                                                    </Form.Item>
-                                                </Col>
-                                            </Row>
-
-                                            {/* 新增：存储镜像和客户端镜像 */}
-                                            <Row gutter={16} style={{ marginBottom: 8 }}>
-                                                {hasStorageNode(name) && (
-                                                    <Col span={12}>
-                                                        <Form.Item
-                                                            {...restField}
-                                                            label="存储镜像"
-                                                            name={[name, 'storageImage']}
-                                                            rules={[{ required: true, message: '请选择存储镜像!' }]}
-                                                            style={{ marginBottom: 8 }}
-                                                        >
-                                                            <Select placeholder="选择存储镜像版本">
-                                                                {getStorageImageOptions(businessType)}
-                                                            </Select>
-                                                        </Form.Item>
-                                                    </Col>
-                                                )}
-                                                <Col span={12}>
-                                                    <Form.Item
-                                                        {...restField}
-                                                        label="客户端镜像"
-                                                        name={[name, 'clientImage']}
-                                                        rules={[{ required: true, message: '请选择客户端镜像!' }]}
-                                                        style={{ marginBottom: 8 }}
-                                                    >
-                                                        <Select placeholder="选择客户端镜像版本">
-                                                            {getClientImageOptions(businessType)}
-                                                        </Select>
-                                                    </Form.Item>
-                                                </Col>
-                                            </Row>
-
-                                            {/* 节点信息动态表单 */}
-                                            <Form.Item label="节点信息" style={{ marginBottom: 8 }}>
-                                                <Form.List name={[name, 'nodeInfo']}>
-                                                    {(nodeFields, nodeOperations) => (
-                                                        <>
-                                                            {nodeFields.map(({ key: nodeKey, name: nodeName, ...nodeRestField }) => {
-                                                                const nodeType = form.getFieldValue(['clusterInfo', name, 'nodeInfo', nodeName, 'nodeType']);
-
-                                                                return (
-                                                                    <div key={nodeKey} style={{
-                                                                        marginBottom: 8,
-                                                                        padding: 8,
-                                                                        background: '#f5f5f5',
-                                                                        borderRadius: 4
-                                                                    }}>
-                                                                        <Space direction="vertical" style={{ width: '100%' }}>
-                                                                            <Space align="baseline" style={{ marginBottom: 4 }}>
-                                                                                <Form.Item
-                                                                                    {...nodeRestField}
-                                                                                    name={[nodeName, 'nodeType']}
-                                                                                    rules={[{ required: true, message: '请选择节点大类!' }]}
-                                                                                    style={{ marginBottom: 0 }}
-                                                                                >
-                                                                                    <Select
-                                                                                        placeholder="选择节点大类"
-                                                                                        style={{ width: 200 }}
-                                                                                        onChange={() => {
-                                                                                            form.setFieldsValue({
-                                                                                                clusterInfo: {
-                                                                                                    [name]: {
-                                                                                                        nodeInfo: {
-                                                                                                            [nodeName]: {
-                                                                                                                nodeRole: undefined,
-                                                                                                                nodeCount: undefined,
-                                                                                                                clientServices: []
-                                                                                                            }
-                                                                                                        }
-                                                                                                    }
-                                                                                                }
-                                                                                            });
-                                                                                        }}
-                                                                                    >
-                                                                                        {nodeTypeOptions}
-                                                                                    </Select>
-                                                                                </Form.Item>
-                                                                                <MinusCircleOutlined
-                                                                                    style={{ fontSize: 14, color: '#ff4d4f' }}
-                                                                                    onClick={() => nodeOperations.remove(nodeName)}
-                                                                                />
-                                                                            </Space>
-
-                                                                            {nodeType === 'storage' && (
-                                                                                <>
-                                                                                    <Row gutter={16} style={{ marginBottom: 4 }}>
-                                                                                        <Col span={12}>
-                                                                                            <Form.Item
-                                                                                                {...nodeRestField}
-                                                                                                label="节点角色"
-                                                                                                name={[nodeName, 'nodeRole']}
-                                                                                                rules={[{ required: true, message: '请选择节点角色!' }]}
-                                                                                                style={{ marginBottom: 0 }}
-                                                                                            >
-                                                                                                <Select placeholder="选择节点角色">
-                                                                                                    <Option value="fsm">FSM</Option>
-                                                                                                    <Option value="fsa">FSA</Option>
-                                                                                                </Select>
-                                                                                            </Form.Item>
-                                                                                        </Col>
-                                                                                        <Col span={12}>
-                                                                                            <Form.Item
-                                                                                                {...nodeRestField}
-                                                                                                label="节点数量"
-                                                                                                name={[nodeName, 'nodeCount']}
-                                                                                                rules={[{
-                                                                                                    required: true,
-                                                                                                    message: '请输入节点数量!',
-                                                                                                    type: 'number',
-                                                                                                    min: 1,
-                                                                                                    max: 100,
-                                                                                                }]}
-                                                                                                style={{ marginBottom: 0 }}
-                                                                                            >
-                                                                                                <InputNumber
-                                                                                                    placeholder="输入节点数量"
-                                                                                                    style={{ width: '100%' }}
-                                                                                                    min={1}
-                                                                                                    max={100}
-                                                                                                />
-                                                                                            </Form.Item>
-                                                                                        </Col>
-                                                                                    </Row>
-                                                                                </>
-                                                                            )}
-
-                                                                            {nodeType === 'client' && (
-                                                                                <>
-                                                                                    <Row gutter={16} style={{ marginBottom: 4 }}>
-                                                                                        <Col span={12}>
-                                                                                            <Form.Item
-                                                                                                {...nodeRestField}
-                                                                                                label="业务服务"
-                                                                                                name={[nodeName, 'clientServices']}
-                                                                                                rules={[{
-                                                                                                    required: true,
-                                                                                                    message: '请至少选择一项业务服务!',
-                                                                                                    type: 'array',
-                                                                                                    min: 1,
-                                                                                                }]}
-                                                                                                style={{ marginBottom: 0 }}
-                                                                                            >
-                                                                                                <Checkbox.Group>
-                                                                                                    <Row gutter={8}>
-                                                                                                        <Col span={6}>
-                                                                                                            <Checkbox value="nfs">NFS</Checkbox>
-                                                                                                        </Col>
-                                                                                                        <Col span={6}>
-                                                                                                            <Checkbox value="obs">OBS</Checkbox>
-                                                                                                        </Col>
-                                                                                                        <Col span={6}>
-                                                                                                            <Checkbox value="dpc">DPC</Checkbox>
-                                                                                                        </Col>
-                                                                                                        <Col span={6}>
-                                                                                                            <Checkbox value="fi">FI</Checkbox>
-                                                                                                        </Col>
-                                                                                                    </Row>
-                                                                                                </Checkbox.Group>
-                                                                                            </Form.Item>
-                                                                                        </Col>
-                                                                                        <Col span={12}>
-                                                                                            <Form.Item
-                                                                                                {...nodeRestField}
-                                                                                                label="节点数量"
-                                                                                                name={[nodeName, 'nodeCount']}
-                                                                                                rules={[{
-                                                                                                    required: true,
-                                                                                                    message: '请输入节点数量!',
-                                                                                                    type: 'number',
-                                                                                                    min: 1,
-                                                                                                    max: 100,
-                                                                                                }]}
-                                                                                                style={{ marginBottom: 0 }}
-                                                                                            >
-                                                                                                <InputNumber
-                                                                                                    placeholder="输入节点数量"
-                                                                                                    style={{ width: '100%' }}
-                                                                                                    min={1}
-                                                                                                    max={100}
-                                                                                                />
-                                                                                            </Form.Item>
-                                                                                        </Col>
-                                                                                    </Row>
-                                                                                </>
-                                                                            )}
-                                                                        </Space>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                            <Form.Item style={{ marginBottom: 0 }}>
-                                                                <Button
-                                                                    type="dashed"
-                                                                    onClick={() => nodeOperations.add({ nodeType: undefined })}
-                                                                    icon={<PlusOutlined />}
-                                                                    block
-                                                                    disabled={businessType === 'dme' &&
-                                                                        form.getFieldValue(['clusterInfo', name, 'nodeInfo'])?.length > 0}
-                                                                >
-                                                                    添加节点
-                                                                </Button>
-                                                            </Form.Item>
-                                                        </>
-                                                    )}
-                                                </Form.List>
-                                            </Form.Item>
-
-                                            {/* 存储硬盘信息 */}
-                                            {showDiskInfo && (
-                                                <Form.Item label="存储硬盘信息" style={{ marginBottom: 8 }}>
-                                                    <Form.List name={[name, 'diskInfo']}>
-                                                        {(diskFields, diskOperations) => (
-                                                            <>
-                                                                {diskFields.map(({ key: diskKey, name: diskName, ...diskRestField }) => (
-                                                                    <div key={diskKey} style={{
-                                                                        marginBottom: 8,
-                                                                        padding: 8,
-                                                                        background: '#f0f0f0',
-                                                                        borderRadius: 4
-                                                                    }}>
-                                                                        <Space direction="vertical" style={{ width: '100%' }}>
-                                                                            <Row gutter={16}>
-                                                                                <Col span={8}>
-                                                                                    <Form.Item
-                                                                                        {...diskRestField}
-                                                                                        label="硬盘类型"
-                                                                                        name={[diskName, 'diskType']}
-                                                                                        rules={[{ required: true, message: '请选择硬盘类型!' }]}
-                                                                                        style={{ marginBottom: 0 }}
-                                                                                    >
-                                                                                        <Select placeholder="选择硬盘类型">
-                                                                                            <Option value="ssd">SSD</Option>
-                                                                                            <Option value="hdd">HDD</Option>
-                                                                                            <Option value="nvme">NVMe</Option>
-                                                                                        </Select>
-                                                                                    </Form.Item>
-                                                                                </Col>
-                                                                                <Col span={8}>
-                                                                                    <Form.Item
-                                                                                        {...diskRestField}
-                                                                                        label="硬盘容量(GB)"
-                                                                                        name={[diskName, 'diskSize']}
-                                                                                        rules={[{
-                                                                                            required: true,
-                                                                                            message: '请输入硬盘容量!',
-                                                                                            type: 'number',
-                                                                                            min: 1,
-                                                                                            max: 32768,
-                                                                                        }]}
-                                                                                        style={{ marginBottom: 0 }}
-                                                                                    >
-                                                                                        <InputNumber
-                                                                                            placeholder="输入容量"
-                                                                                            style={{ width: '100%' }}
-                                                                                            min={1}
-                                                                                            max={32768}
-                                                                                        />
-                                                                                    </Form.Item>
-                                                                                </Col>
-                                                                                <Col span={7}>
-                                                                                    <Form.Item
-                                                                                        {...diskRestField}
-                                                                                        label="硬盘数量"
-                                                                                        name={[diskName, 'diskCount']}
-                                                                                        rules={[{
-                                                                                            required: true,
-                                                                                            message: '请输入硬盘数量!',
-                                                                                            type: 'number',
-                                                                                            min: 1,
-                                                                                            max: 100,
-                                                                                        }]}
-                                                                                        style={{ marginBottom: 0 }}
-                                                                                    >
-                                                                                        <InputNumber
-                                                                                            placeholder="输入数量"
-                                                                                            style={{ width: '100%' }}
-                                                                                            min={1}
-                                                                                            max={100}
-                                                                                        />
-                                                                                    </Form.Item>
-                                                                                </Col>
-                                                                                <Col span={1}>
-                                                                                    <MinusCircleOutlined
-                                                                                        style={{ marginTop: 24, fontSize: 14, color: '#ff4d4f' }}
-                                                                                        onClick={() => diskOperations.remove(diskName)}
-                                                                                    />
-                                                                                </Col>
-                                                                            </Row>
-                                                                        </Space>
-                                                                    </div>
-                                                                ))}
-                                                                <Form.Item style={{ marginBottom: 0 }}>
-                                                                    <Button
-                                                                        type="dashed"
-                                                                        onClick={() => diskOperations.add({
-                                                                            diskType: undefined,
-                                                                            diskSize: undefined,
-                                                                            diskCount: undefined
-                                                                        })}
-                                                                        icon={<PlusOutlined />}
-                                                                        block
-                                                                    >
-                                                                        添加硬盘
-                                                                    </Button>
-                                                                </Form.Item>
-                                                            </>
-                                                        )}
-                                                    </Form.List>
-                                                </Form.Item>
-                                            )}
-
-                                            {/* 存储网卡信息 */}
-                                            {showNetworkInfo && (
-                                                <Form.Item label="存储网卡信息" style={{
-                                                    background: '#f9f9f9',
-                                                    padding: 12,
-                                                    borderRadius: 4,
-                                                    marginBottom: 8
-                                                }}>
-                                                    <Row gutter={16}>
-                                                        <Col span={8}>
-                                                            <Form.Item
-                                                                {...restField}
-                                                                label="网卡数量"
-                                                                name={[name, 'networkInfo', 'nicCount']}
-                                                                initialValue={4}
-                                                                rules={[{
-                                                                    required: true,
-                                                                    message: '请输入网卡数量!',
-                                                                    type: 'number',
-                                                                    min: 1,
-                                                                    max: 4,
-                                                                }]}
-                                                                style={{ marginBottom: 0 }}
-                                                            >
-                                                                <InputNumber
-                                                                    placeholder="1-4"
-                                                                    style={{ width: '100%' }}
-                                                                    min={1}
-                                                                    max={4}
-                                                                />
-                                                            </Form.Item>
-                                                        </Col>
-                                                        <Col span={8}>
-                                                            <Form.Item
-                                                                {...restField}
-                                                                label="网卡类型"
-                                                                name={[name, 'networkInfo', 'nicType']}
-                                                                initialValue="tcp"
-                                                                rules={[{ required: true, message: '请选择网卡类型!' }]}
-                                                                style={{ marginBottom: 0 }}
-                                                            >
-                                                                <Select placeholder="选择网卡类型">
-                                                                    <Option value="tcp">TCP</Option>
-                                                                    <Option value="roce">ROCE</Option>
-                                                                </Select>
-                                                            </Form.Item>
-                                                        </Col>
-                                                        <Col span={8}>
-                                                            <Form.Item
-                                                                {...restField}
-                                                                label="业务网络IP数量"
-                                                                name={[name, 'networkInfo', 'ipCount']}
-                                                                initialValue={5}
-                                                                rules={[{
-                                                                    required: true,
-                                                                    message: '请输入IP数量!',
-                                                                    type: 'number',
-                                                                    min: 3,
-                                                                    max: 8,
-                                                                }]}
-                                                                style={{ marginBottom: 0 }}
-                                                            >
-                                                                <InputNumber
-                                                                    placeholder="3-8"
-                                                                    style={{ width: '100%' }}
-                                                                    min={3}
-                                                                    max={8}
-                                                                />
-                                                            </Form.Item>
-                                                        </Col>
-                                                    </Row>
-                                                </Form.Item>
-                                            )}
-
-                                            {fields.length > 1 && (
-                                                <MinusCircleOutlined
-                                                    style={{
-                                                        fontSize: 14,
-                                                        color: '#ff4d4f',
-                                                        position: 'absolute',
-                                                        bottom: 12,
-                                                        right: 12
-                                                    }}
-                                                    onClick={() => remove(name)}
-                                                />
-                                            )}
-                                        </div>
-                                    );
-                                })}
-
-                                <Form.Item style={{ marginBottom: 0 }}>
-                                    <Button
-                                        type="dashed"
-                                        onClick={() => {
-                                            add({
-                                                clusterName: '',
-                                                businessType: undefined,
-                                                platform: undefined,
-                                                storageImage: undefined,
-                                                clientImage: undefined,
-                                                nodeInfo: [{
-                                                    nodeType: undefined
-                                                }]
-                                            });
-                                            setNodeStats([...nodeStats, { storageCount: 0, clientCount: 0 }]);
-                                        }}
-                                        block
-                                        icon={<PlusOutlined />}
-                                    >
-                                        添加集群信息
-                                    </Button>
-                                </Form.Item>
-                            </>
-                        )}
-                    </Form.List>
-
-                    {clusterCount >= 2 && (
-                        <Form.Item
-                            label="合一环境名称"
-                            name="combinedEnvName"
-                            rules={[{ required: true, message: '请输入合一环境名称!' }]}
-                            style={{ marginBottom: 12 }}
-                        >
-                            <Input placeholder="请输入多个集群合并后的环境名称" />
-                        </Form.Item>
-                    )}
-
-                    <Form.Item style={{ marginBottom: 0 }}>
-                        <Space>
-                            <Button type="primary" htmlType="submit">
-                                提交
-                            </Button>
-                            <Button htmlType="button" onClick={() => form.resetFields()}>
-                                重置
-                            </Button>
-                        </Space>
+    const ClientNodeConfig = ({ nodeName, nodeRestField }) => (
+        <>
+            <Row gutter={16}>
+                <Col span={12}>
+                    <Form.Item
+                        {...nodeRestField}
+                        label="业务服务"
+                        name={[nodeName, 'clientServices']}
+                        rules={[{ required: true, message: '请至少选择一项业务服务!', type: 'array', min: 1 }]}
+                    >
+                        <Checkbox.Group>
+                            <Row gutter={8}>
+                                <Col span={6}><Checkbox value="nfs">NFS</Checkbox></Col>
+                                <Col span={6}><Checkbox value="obs">OBS</Checkbox></Col>
+                                <Col span={6}><Checkbox value="dpc">DPC</Checkbox></Col>
+                                <Col span={6}><Checkbox value="fi">FI</Checkbox></Col>
+                            </Row>
+                        </Checkbox.Group>
                     </Form.Item>
-                </Form>
-            </div>
+                </Col>
+                <Col span={12}>
+                    <Form.Item
+                        {...nodeRestField}
+                        label="节点数量"
+                        name={[nodeName, 'nodeCount']}
+                        rules={[{ required: true, message: '请输入节点数量!', type: 'number', min: 1, max: 100 }]}
+                    >
+                        <InputNumber placeholder="输入节点数量" style={{ width: '100%' }} min={1} max={100} />
+                    </Form.Item>
+                </Col>
+            </Row>
+        </>
+    );
 
-            {/* 右侧模板和收藏部分保持不变 */}
-            <div style={{ flex: 1 }}>
+    const NodeItem = ({ nodeName, nodeRestField, nodeTypeOptions, businessType, form, clusterName, onRemove }) => {
+        const nodeType = Form.useWatch(['clusterInfo', clusterName, 'nodeInfo', nodeName, 'nodeType'], form);
+
+        const resetNodeFields = () => {
+            form.setFieldsValue({
+                clusterInfo: {
+                    [clusterName]: {
+                        nodeInfo: {
+                            [nodeName]: {
+                                nodeRole: undefined,
+                                nodeCount: undefined,
+                                clientServices: []
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        return (
+            <div style={{ marginBottom: 8, padding: 8, background: '#f5f5f5', borderRadius: 4 }}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space align="baseline" style={{ marginBottom: 4 }}>
+                        <Form.Item
+                            {...nodeRestField}
+                            name={[nodeName, 'nodeType']}
+                            rules={[{ required: true, message: '请选择节点大类!' }]}
+                            style={{ marginBottom: 0 }}
+                        >
+                            <Select
+                                placeholder="选择节点大类"
+                                style={{ width: 200 }}
+                                onChange={resetNodeFields}
+                            >
+                                {nodeTypeOptions}
+                            </Select>
+                        </Form.Item>
+                        <MinusCircleOutlined
+                            style={{ fontSize: 14, color: '#ff4d4f' }}
+                            onClick={onRemove}
+                        />
+                    </Space>
+
+                    {nodeType === 'storage' && <StorageNodeConfig nodeName={nodeName} nodeRestField={nodeRestField} />}
+                    {nodeType === 'client' && <ClientNodeConfig nodeName={nodeName} nodeRestField={nodeRestField} />}
+                </Space>
+            </div>
+        );
+    };
+
+    const DiskItem = ({ diskName, diskRestField, onRemove }) => (
+        <div style={{ marginBottom: 8, padding: 8, background: '#f0f0f0', borderRadius: 4 }}>
+            <Row gutter={16}>
+                <Col span={8}>
+                    <Form.Item
+                        {...diskRestField}
+                        label="硬盘类型"
+                        name={[diskName, 'diskType']}
+                        rules={[{ required: true, message: '请选择硬盘类型!' }]}
+                    >
+                        <Select placeholder="选择硬盘类型">
+                            <Option value="ssd">SSD</Option>
+                            <Option value="hdd">HDD</Option>
+                            <Option value="nvme">NVMe</Option>
+                        </Select>
+                    </Form.Item>
+                </Col>
+                <Col span={8}>
+                    <Form.Item
+                        {...diskRestField}
+                        label="硬盘容量(GB)"
+                        name={[diskName, 'diskSize']}
+                        rules={[{ required: true, message: '请输入硬盘容量!', type: 'number', min: 1, max: 32768 }]}
+                    >
+                        <InputNumber placeholder="输入容量" style={{ width: '100%' }} min={1} max={32768} />
+                    </Form.Item>
+                </Col>
+                <Col span={7}>
+                    <Form.Item
+                        {...diskRestField}
+                        label="硬盘数量"
+                        name={[diskName, 'diskCount']}
+                        rules={[{ required: true, message: '请输入硬盘数量!', type: 'number', min: 1, max: 100 }]}
+                    >
+                        <InputNumber placeholder="输入数量" style={{ width: '100%' }} min={1} max={100} />
+                    </Form.Item>
+                </Col>
+                <Col span={1}>
+                    <MinusCircleOutlined
+                        style={{ marginTop: 24, fontSize: 14, color: '#ff4d4f' }}
+                        onClick={onRemove}
+                    />
+                </Col>
+            </Row>
+        </div>
+    );
+
+    const ClusterBasicInfo = ({ name, restField }) => (
+        <>
+            <Row gutter={16} style={{ marginBottom: 8 }}>
+                <Col span={24}>
+                    <Form.Item
+                        {...restField}
+                        label="集群名称"
+                        name={[name, 'clusterName']}
+                        rules={[{ required: true, message: '请输入集群名称!' }]}
+                        style={{ marginBottom: 8 }}
+                    >
+                        <Input placeholder="请输入集群名称" />
+                    </Form.Item>
+                </Col>
+            </Row>
+
+            <Row gutter={16} style={{ marginBottom: 8 }}>
+                <Col span={12}>
+                    <Form.Item
+                        {...restField}
+                        label="业务大类"
+                        name={[name, 'businessType']}
+                        rules={[{ required: true, message: '请选择业务大类!' }]}
+                        style={{ marginBottom: 8 }}
+                    >
+                        <Select placeholder="请选择业务大类">
+                            <Option value="block">Block</Option>
+                            <Option value="nas">NAS</Option>
+                            <Option value="dme">DME</Option>
+                        </Select>
+                    </Form.Item>
+                </Col>
+                <Col span={12}>
+                    <Form.Item
+                        {...restField}
+                        label="平台"
+                        name={[name, 'platform']}
+                        rules={[{ required: true, message: '请选择平台!' }]}
+                        style={{ marginBottom: 8 }}
+                    >
+                        <Select placeholder="请选择平台">
+                            <Option value="x86">x86</Option>
+                            <Option value="arm">ARM</Option>
+                        </Select>
+                    </Form.Item>
+                </Col>
+            </Row>
+        </>
+    );
+
+    const ClusterImageConfig = ({ name, restField, businessType, hasStorageNode }) => (
+        <Row gutter={16} style={{ marginBottom: 8 }}>
+            {hasStorageNode && (
+                <Col span={12}>
+                    <Form.Item
+                        {...restField}
+                        label="存储镜像"
+                        name={[name, 'storageImage']}
+                        rules={[{ required: true, message: '请选择存储镜像!' }]}
+                        style={{ marginBottom: 8 }}
+                    >
+                        <Select placeholder="选择存储镜像版本">
+                            {getStorageImageOptions(businessType)}
+                        </Select>
+                    </Form.Item>
+                </Col>
+            )}
+            <Col span={hasStorageNode ? 12 : 24}>
+                <Form.Item
+                    {...restField}
+                    label="客户端镜像"
+                    name={[name, 'clientImage']}
+                    rules={[{ required: true, message: '请选择客户端镜像!' }]}
+                    style={{ marginBottom: 8 }}
+                >
+                    <Select placeholder="选择客户端镜像版本">
+                        {getClientImageOptions(businessType)}
+                    </Select>
+                </Form.Item>
+            </Col>
+        </Row>
+    );
+
+    const NodeInfoSection = ({ name, restField, businessType, form }) => {
+        const nodeTypeOptions = getNodeTypeOptions(businessType);
+
+        return (
+            <Form.Item label="节点信息" style={{ marginBottom: 8 }}>
+                <Form.List name={[name, 'nodeInfo']}>
+                    {(nodeFields, nodeOperations) => (
+                        <>
+                            {nodeFields.map(({ key: nodeKey, name: nodeName, ...nodeRestField }) => (
+                                <NodeItem
+                                    key={nodeKey}
+                                    nodeName={nodeName}
+                                    nodeRestField={nodeRestField}
+                                    nodeTypeOptions={nodeTypeOptions}
+                                    businessType={businessType}
+                                    form={form}
+                                    clusterName={name}
+                                    onRemove={() => nodeOperations.remove(nodeName)}
+                                />
+                            ))}
+                            <Form.Item style={{ marginBottom: 0 }}>
+                                <Button
+                                    type="dashed"
+                                    onClick={() => nodeOperations.add({ nodeType: businessType === 'dme' ? 'client' : 'storage' })}
+                                    icon={<PlusOutlined />}
+                                    block
+                                    disabled={businessType === 'dme' &&
+                                        form.getFieldValue(['clusterInfo', name, 'nodeInfo'])?.length > 0}
+                                >
+                                    添加节点
+                                </Button>
+                            </Form.Item>
+                        </>
+                    )}
+                </Form.List>
+            </Form.Item>
+        );
+    };
+
+    const StorageDiskInfo = ({ name, restField, hasStorageNode }) => {
+        if (!hasStorageNode) return null;
+
+        return (
+            <Form.Item label="存储硬盘信息" style={{ marginBottom: 8 }}>
+                <Form.List name={[name, 'diskInfo']}>
+                    {(diskFields, diskOperations) => (
+                        <>
+                            {diskFields.map(({ key: diskKey, name: diskName, ...diskRestField }) => (
+                                <DiskItem
+                                    key={diskKey}
+                                    diskName={diskName}
+                                    diskRestField={diskRestField}
+                                    onRemove={() => diskOperations.remove(diskName)}
+                                />
+                            ))}
+                            <Form.Item style={{ marginBottom: 0 }}>
+                                <Button
+                                    type="dashed"
+                                    onClick={() => diskOperations.add({
+                                        diskType: undefined,
+                                        diskSize: undefined,
+                                        diskCount: undefined
+                                    })}
+                                    icon={<PlusOutlined />}
+                                    block
+                                >
+                                    添加硬盘
+                                </Button>
+                            </Form.Item>
+                        </>
+                    )}
+                </Form.List>
+            </Form.Item>
+        );
+    };
+
+    const StorageNetworkInfo = ({ name, restField, hasStorageNode }) => {
+        if (!hasStorageNode) return null;
+
+        return (
+            <Form.Item label="存储网卡信息" style={{
+                background: '#f9f9f9',
+                padding: 12,
+                borderRadius: 4,
+                marginBottom: 8
+            }}>
+                <Row gutter={16}>
+                    <Col span={8}>
+                        <Form.Item
+                            {...restField}
+                            label="网卡数量"
+                            name={[name, 'networkInfo', 'nicCount']}
+                            initialValue={4}
+                            rules={[{ required: true, message: '请输入网卡数量!', type: 'number', min: 1, max: 4 }]}
+                            style={{ marginBottom: 0 }}
+                        >
+                            <InputNumber placeholder="1-4" style={{ width: '100%' }} min={1} max={4} />
+                        </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                        <Form.Item
+                            {...restField}
+                            label="网卡类型"
+                            name={[name, 'networkInfo', 'nicType']}
+                            initialValue="tcp"
+                            rules={[{ required: true, message: '请选择网卡类型!' }]}
+                            style={{ marginBottom: 0 }}
+                        >
+                            <Select placeholder="选择网卡类型">
+                                <Option value="tcp">TCP</Option>
+                                <Option value="roce">ROCE</Option>
+                            </Select>
+                        </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                        <Form.Item
+                            {...restField}
+                            label="业务网络IP数量"
+                            name={[name, 'networkInfo', 'ipCount']}
+                            initialValue={5}
+                            rules={[{ required: true, message: '请输入IP数量!', type: 'number', min: 3, max: 8 }]}
+                            style={{ marginBottom: 0 }}
+                        >
+                            <InputNumber placeholder="3-8" style={{ width: '100%' }} min={3} max={8} />
+                        </Form.Item>
+                    </Col>
+                </Row>
+            </Form.Item>
+        );
+    };
+
+    const ClusterCard = ({ name, restField, form, nodeStats, onRemoveCluster }) => {
+        const businessType = Form.useWatch(['clusterInfo', name, 'businessType'], form);
+        const hasStorageNode = useCallback(() => {
+            const nodeInfo = form.getFieldValue(['clusterInfo', name, 'nodeInfo']);
+            return nodeInfo?.some(node => node?.nodeType === 'storage');
+        }, [form, name]);
+
+        return (
+            <div style={{
+                marginBottom: 12,
+                border: '1px solid #d9d9d9',
+                padding: 12,
+                borderRadius: 4,
+                position: 'relative'
+            }}>
+                <ClusterHeader
+                    clusterIndex={name + 1}
+                    stats={nodeStats[name] || { storageCount: 0, clientCount: 0 }}
+                    onRemove={onRemoveCluster}
+                />
+
+                <ClusterBasicInfo name={name} restField={restField} />
+                <ClusterImageConfig
+                    name={name}
+                    restField={restField}
+                    businessType={businessType}
+                    hasStorageNode={hasStorageNode()}
+                />
+                <NodeInfoSection
+                    name={name}
+                    restField={restField}
+                    businessType={businessType}
+                    form={form}
+                />
+                <StorageDiskInfo
+                    name={name}
+                    restField={restField}
+                    hasStorageNode={hasStorageNode()}
+                />
+                <StorageNetworkInfo
+                    name={name}
+                    restField={restField}
+                    hasStorageNode={hasStorageNode()}
+                />
+            </div>
+        );
+    };
+
+    const TemplatePanel = ({
+                               templateButtons,
+                               activeTemplate,
+                               applyTemplate,
+                               favoriteConfigs,
+                               saveAsFavorite,
+                               importConfig,
+                               exportConfig,
+                               toggleFavorite,
+                               removeFavorite
+                           }) => {
+        return (
+            <>
                 <Card title="典型配置" style={{ marginBottom: 12 }} bodyStyle={{ padding: 12 }}>
                     <Row gutter={[8, 8]}>
                         {templateButtons.map(template => (
@@ -872,9 +846,9 @@ const EnvironmentCreateForm = () => {
                                         fontSize: 12
                                     }}
                                 >
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {config.configName}
-                  </span>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {config.configName}
+                                    </span>
                                     <Space size="small">
                                         <Button
                                             type="text"
@@ -905,12 +879,117 @@ const EnvironmentCreateForm = () => {
                         </Space>
                     )}
                 </Card>
+            </>
+        );
+    };
+
+    return (
+        <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ flex: 3 }}>
+                <Form
+                    form={form}
+                    name="createEnvironment"
+                    layout="vertical"
+                    onFinish={onFinish}
+                    onFinishFailed={onFinishFailed}
+                    autoComplete="off"
+                    onValuesChange={handleClusterChange}
+                >
+                    <h2 style={{ marginBottom: 12 }}>创建新环境</h2>
+                    <Form.List name="clusterInfo">
+                        {(fields, { add, remove }) => (
+                            <>
+                                {fields.map(({ key, name, ...restField }) => (
+                                    <ClusterCard
+                                        key={key}
+                                        name={name}
+                                        restField={restField}
+                                        form={form}
+                                        nodeStats={nodeStats}
+                                        onRemoveCluster={fields.length > 1 ? () => remove(name) : null}
+                                    />
+                                ))}
+                                <Form.Item style={{ marginBottom: 0 }}>
+                                    <Button
+                                        type="dashed"
+                                        onClick={() => {
+                                            add({
+                                                clusterName: '',
+                                                businessType: undefined,
+                                                platform: undefined,
+                                                storageImage: undefined,
+                                                clientImage: undefined,
+                                                nodeInfo: [{ nodeType: undefined }]
+                                            });
+                                            setNodeStats([...nodeStats, { storageCount: 0, clientCount: 0 }]);
+                                        }}
+                                        block
+                                        icon={<PlusOutlined />}
+                                    >
+                                        添加集群信息
+                                    </Button>
+                                </Form.Item>
+                            </>
+                        )}
+                    </Form.List>
+
+                    {clusterCount >= 2 && (
+                        <Form.Item
+                            label="合一环境名称"
+                            name="combinedEnvName"
+                            rules={[{ required: true, message: '请输入合一环境名称!' }]}
+                            style={{ marginBottom: 12 }}
+                        >
+                            <Input placeholder="请输入多个集群合并后的环境名称" />
+                        </Form.Item>
+                    )}
+
+                    <Form.Item style={{ marginBottom: 0 }}>
+                        <Space>
+                            <Button type="primary" htmlType="submit">
+                                提交
+                            </Button>
+                            <Button htmlType="button" onClick={() => form.resetFields()}>
+                                重置
+                            </Button>
+                        </Space>
+                    </Form.Item>
+                </Form>
             </div>
+
+            <div style={{ flex: 1 }}>
+                <TemplatePanel
+                    templateButtons={templateButtons}
+                    activeTemplate={activeTemplate}
+                    applyTemplate={applyTemplate}
+                    favoriteConfigs={favoriteConfigs}
+                    saveAsFavorite={saveAsFavorite}
+                    importConfig={importConfig}
+                    exportConfig={exportConfig}
+                    toggleFavorite={toggleFavorite}
+                    removeFavorite={removeFavorite}
+                />
+            </div>
+
+            {/* 收藏配置的Modal */}
+            <Modal
+                title="收藏当前配置"
+                open={isFavoriteModalVisible}
+                onOk={handleFavoriteOk}
+                onCancel={handleFavoriteCancel}
+                centered
+                okText="保存"
+                cancelText="取消"
+            >
+                <Input
+                    placeholder="请输入配置名称"
+                    value={favoriteName}
+                    onChange={(e) => setFavoriteName(e.target.value)}
+                    onPressEnter={handleFavoriteOk}
+                />
+            </Modal>
         </div>
     );
 };
-
-
-
 
 export default EnvironmentCreateForm;
