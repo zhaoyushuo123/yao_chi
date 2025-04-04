@@ -260,7 +260,7 @@ const EnvironmentCreateForm = () => {
                             { nodeType: 'client', clientServices: ['nfs'], nodeCount: 1 }
                         ],
                         diskInfo: [
-                            { diskType: 'ssd', diskSize: 512, diskCount: 10 }
+                            { diskType: 'ssd', diskSize: 80, diskCount: 5 }
                         ],
                         networkInfo: {
                             nicCount: 4,
@@ -279,7 +279,7 @@ const EnvironmentCreateForm = () => {
                             { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 3 }
                         ],
                         diskInfo: [
-                            { diskType: 'ssd', diskSize: 512, diskCount: 12 }
+                            { diskType: 'ssd', diskSize: 80, diskCount: 5 }
                         ],
                         networkInfo: {
                             nicCount: 4,
@@ -312,7 +312,7 @@ const EnvironmentCreateForm = () => {
                             { nodeType: 'storage', nodeRole: 'vbs', nodeCount: 3 }
                         ],
                         diskInfo: [
-                            { diskType: 'ssd', diskSize: 512, diskCount: 12 }
+                            { diskType: 'ssd', diskSize: 80, diskCount: 5 }
                         ],
                         networkInfo: {
                             nicCount: 4,
@@ -334,7 +334,7 @@ const EnvironmentCreateForm = () => {
                             { nodeType: 'client', clientServices: i === 0 ? ['nfs', 'obs', 'dpc', 'fi'] : ['nfs', 'obs', 'dpc'], nodeCount: 1 }
                         ],
                         diskInfo: [
-                            { diskType: 'ssd', diskSize: 200, diskCount: 6 }
+                            { diskType: 'ssd', diskSize: 80, diskCount: 5 }
                         ],
                         networkInfo: {
                             nicCount: 4,
@@ -356,7 +356,7 @@ const EnvironmentCreateForm = () => {
                             { nodeType: 'client', clientServices: i === 0 ? ['nfs', 'obs', 'dpc', 'fi'] : ['nfs', 'obs', 'dpc'], nodeCount: 1 }
                         ],
                         diskInfo: [
-                            { diskType: 'ssd', diskSize: 200, diskCount: 6 }
+                            { diskType: 'ssd', diskSize: 80, diskCount: 5 }
                         ],
                         networkInfo: {
                             nicCount: 4,
@@ -378,7 +378,7 @@ const EnvironmentCreateForm = () => {
                             { nodeType: 'client', clientServices: i === 0 ? ['nfs', 'obs', 'dpc', 'fi'] : ['nfs', 'obs', 'dpc'], nodeCount: 1 }
                         ],
                         diskInfo: [
-                            { diskType: 'ssd', diskSize: 200, diskCount: 6 }
+                            { diskType: 'ssd', diskSize: 80, diskCount: 5 }
                         ],
                         networkInfo: {
                             nicCount: 4,
@@ -400,7 +400,7 @@ const EnvironmentCreateForm = () => {
                             { nodeType: 'client', clientServices: i === 0 ? ['nfs', 'obs', 'dpc', 'fi'] : ['nfs', 'obs', 'dpc'], nodeCount: 1 }
                         ],
                         diskInfo: [
-                            { diskType: 'ssd', diskSize: 200, diskCount: 6 }
+                            { diskType: 'ssd', diskSize: 80, diskCount: 5 }
                         ],
                         networkInfo: {
                             nicCount: 4,
@@ -788,28 +788,8 @@ const EnvironmentCreateForm = () => {
         return (
             <>
                 <Row gutter={16} style={{ marginBottom: 8 }}>
-                    <Col span={businessType === 'block' ? 12 : businessType === 'nas' ? 8 : 24}>
-                        <Form.Item
-                            {...restField}
-                            label="集群名称"
-                            name={[name, 'clusterName']}
-                            rules={[{ required: true, message: '请输入集群名称!' }]}
-                            style={{ marginBottom: 8 }}
-                        >
-                            {/* 修复点：直接使用Input组件，不添加防抖处理，与合一环境名称输入框保持一致 */}
-                            <Input placeholder="请输入集群名称"  onChange={(e) => {
-                                form.setFieldsValue({
-                                    clusterInfo: {
-                                        [name]: {
-                                            clusterName: e.target.value
-                                        }
-                                    }
-                                });
-                            }}/>
-                        </Form.Item>
-                    </Col>
                     {businessType === 'block' && (
-                        <Col span={4}>
+                        <Col span={12}>
                             <Form.Item
                                 {...restField}
                                 name={[name, 'vbsSeparateDeploy']}
@@ -829,7 +809,7 @@ const EnvironmentCreateForm = () => {
                     )}
                     {businessType === 'nas' && (
                         <>
-                            <Col span={4}>
+                            <Col span={6}>
                                 <Form.Item
                                     {...restField}
                                     name={[name, 'enableMetadata']}
@@ -844,7 +824,7 @@ const EnvironmentCreateForm = () => {
                                     </Checkbox>
                                 </Form.Item>
                             </Col>
-                            <Col span={4}>
+                            <Col span={6}>
                                 <Form.Item
                                     {...restField}
                                     name={[name, 'enableReplication']}
@@ -1068,7 +1048,7 @@ const EnvironmentCreateForm = () => {
         );
     };
 
-    const ClusterCard = ({ name, restField, form, nodeStats, onRemoveCluster }) => {
+    const ClusterCard = ({ name, restField, form, nodeStats, onRemoveCluster, hideClusterName }) => {
         const businessType = Form.useWatch(['clusterInfo', name, 'businessType'], form);
         const vbsSeparateDeploy = Form.useWatch(['clusterInfo', name, 'vbsSeparateDeploy'], form);
         const enableMetadata = Form.useWatch(['clusterInfo', name, 'enableMetadata'], form);
@@ -1091,6 +1071,18 @@ const EnvironmentCreateForm = () => {
                     stats={nodeStats[name] || { storageCount: 0, clientCount: 0 }}
                     onRemove={onRemoveCluster}
                 />
+
+                {!hideClusterName && (
+                    <Form.Item
+                        {...restField}
+                        label="集群名称"
+                        name={[name, 'clusterName']}
+                        rules={[{ required: true, message: '请输入集群名称!' }]}
+                        style={{ marginBottom: 8 }}
+                    >
+                        <Input placeholder="请输入集群名称" />
+                    </Form.Item>
+                )}
 
                 <ClusterBasicInfo name={name} restField={restField} businessType={businessType} />
                 <ClusterImageConfig
@@ -1252,6 +1244,8 @@ const EnvironmentCreateForm = () => {
                     onValuesChange={handleClusterChange}
                 >
                     <h2 style={{ marginBottom: 12 }}>创建新环境</h2>
+
+                    {/* 集群信息部分 */}
                     <Form.List name="clusterInfo">
                         {(fields, { add, remove }) => (
                             <>
@@ -1262,7 +1256,11 @@ const EnvironmentCreateForm = () => {
                                         restField={restField}
                                         form={form}
                                         nodeStats={nodeStats}
-                                        onRemoveCluster={fields.length > 1 ? () => remove(name) : null}
+                                        onRemoveCluster={() => {
+                                            remove(name);
+                                            setClusterCount(clusterCount - 1);
+                                        }}
+                                        hideClusterName={true}
                                     />
                                 ))}
                                 <Form.Item style={{ marginBottom: 0 }}>
@@ -1280,7 +1278,7 @@ const EnvironmentCreateForm = () => {
                                                 enableMetadata: false,
                                                 enableReplication: false
                                             });
-                                            setNodeStats([...nodeStats, { storageCount: 0, clientCount: 0 }]);
+                                            setClusterCount(clusterCount + 1);
                                         }}
                                         block
                                         icon={<PlusOutlined />}
@@ -1292,16 +1290,30 @@ const EnvironmentCreateForm = () => {
                         )}
                     </Form.List>
 
-                    {clusterCount >= 2 && (
-                        <Form.Item
-                            label="合一环境名称"
-                            name="combinedEnvName"
-                            rules={[{ required: true, message: '请输入合一环境名称!' }]}
-                            style={{ marginBottom: 12 }}
-                        >
-                            <Input placeholder="请输入多个集群合并后的环境名称" />
-                        </Form.Item>
-                    )}
+                    <Card title="环境名称" style={{ marginBottom: 12 }}>
+                        {Array.from({ length: clusterCount }).map((_, index) => (
+                            <Form.Item
+                                key={index}
+                                label={`集群${index + 1}名称`}
+                                name={['clusterInfo', index, 'clusterName']}
+                                rules={[{ required: true, message: `请输入集群${index + 1}名称!` }]}
+                                style={{ marginBottom: 8 }}
+                            >
+                                <Input placeholder={`请输入集群${index + 1}名称`} />
+                            </Form.Item>
+                        ))}
+
+                        {clusterCount >= 2 && (
+                            <Form.Item
+                                label="合一环境名称"
+                                name="combinedEnvName"
+                                rules={[{ required: true, message: '请输入合一环境名称!' }]}
+                                style={{ marginBottom: 0 }}
+                            >
+                                <Input placeholder="请输入多个集群合并后的环境名称" />
+                            </Form.Item>
+                        )}
+                    </Card>
 
                     <Form.Item style={{ marginBottom: 0 }}>
                         <Space>
