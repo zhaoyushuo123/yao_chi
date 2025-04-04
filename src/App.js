@@ -36,7 +36,20 @@ const EnvironmentCreateForm = () => {
     const [isFavoriteModalVisible, setIsFavoriteModalVisible] = useState(false);
     const [favoriteName, setFavoriteName] = useState('');
     const [showClientImage, setShowClientImage] = useState(false);
+    const [templateDescription, setTemplateDescription] = useState('');
     const inputTimerRef = useRef(null);
+
+    // 模板描述信息
+    const templateDescriptions = {
+        '3NODE_1Client': '3节点存储集群配置，包含2个FSM节点和1个FSA节点，以及1个客户端节点，适合基础NAS场景',
+        'BLOCK_Template': '块存储集群配置，包含3个FSM节点，适合块存储业务场景',
+        'DME_Template': 'DME集群配置，包含2个客户端节点，适合数据管理引擎场景',
+        '6NODE_VBS_Sperate': '6节点VBS分离部署配置，包含2个FSM节点、1个FSA节点和3个VBS节点，适合高性能块存储场景',
+        '2DC': '双数据中心配置，包含2个集群，每个集群3个FSM节点和1个客户端节点，支持数据复制',
+        '3DC': '三数据中心配置，包含3个集群，每个集群3个FSM节点和1个客户端节点，支持数据复制',
+        '2GFS': '双GFS集群配置，包含2个集群，每个集群3个FSM节点和1个客户端节点',
+        '3GFS': '三GFS集群配置，包含3个集群，每个集群3个FSM节点和1个客户端节点'
+    };
 
     // 初始化默认展示一个集群
     useEffect(() => {
@@ -45,6 +58,7 @@ const EnvironmentCreateForm = () => {
                 clusterName: '',
                 businessType: undefined,
                 platform: undefined,
+                clusterRole: '默认集群',
                 storageImage: undefined,
                 clientImage: undefined,
                 nodeInfo: [{
@@ -52,7 +66,8 @@ const EnvironmentCreateForm = () => {
                 }],
                 vbsSeparateDeploy: false,
                 enableMetadata: false,
-                enableReplication: false
+                enableReplication: false,
+                enableTiering: false
             }]
         });
         setClusterCount(1);
@@ -229,6 +244,7 @@ const EnvironmentCreateForm = () => {
             setNodeStats(calculateNodeStats(config.configData));
             message.success(`已应用自定义配置: ${config.configName}`);
             setActiveTemplate(`custom_${config.configName}`);
+            setTemplateDescription('');
         } else {
             let values = {
                 clusterInfo: [],
@@ -241,6 +257,7 @@ const EnvironmentCreateForm = () => {
                         clusterName: '3节点存储集群',
                         businessType: 'nas',
                         platform: 'x86',
+                        clusterRole: '默认集群',
                         storageImage: 'euler8',
                         clientImage: 'ubuntu',
                         nodeInfo: [
@@ -263,6 +280,7 @@ const EnvironmentCreateForm = () => {
                         clusterName: 'BLOCK集群',
                         businessType: 'block',
                         platform: 'x86',
+                        clusterRole: '默认集群',
                         storageImage: 'euler8',
                         nodeInfo: [
                             { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 3 }
@@ -282,6 +300,7 @@ const EnvironmentCreateForm = () => {
                         clusterName: 'DME集群',
                         businessType: 'dme',
                         platform: 'x86',
+                        clusterRole: '默认集群',
                         clientImage: 'euler12',
                         nodeInfo: [
                             { nodeType: 'client', clientServices: ['nfs'], nodeCount: 2 }
@@ -293,6 +312,7 @@ const EnvironmentCreateForm = () => {
                         clusterName: '6节点VBS分离集群',
                         businessType: 'block',
                         platform: 'x86',
+                        clusterRole: '默认集群',
                         storageImage: 'euler8',
                         vbsSeparateDeploy: true,
                         nodeInfo: [
@@ -315,9 +335,11 @@ const EnvironmentCreateForm = () => {
                         clusterName: `2DC集群${i+1}`,
                         businessType: 'nas',
                         platform: 'x86',
+                        clusterRole: i === 0 ? '9000纳管本端集群' : '9000纳管远端集群',
                         storageImage: 'euler8',
                         clientImage: 'ubuntu',
                         enableReplication: true,
+                        enableTiering: true,
                         nodeInfo: [
                             { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 3 },
                             { nodeType: 'client', clientServices: i === 0 ? ['nfs', 'obs', 'dpc', 'fi'] : ['nfs', 'obs', 'dpc'], nodeCount: 1 }
@@ -337,9 +359,11 @@ const EnvironmentCreateForm = () => {
                         clusterName: `3DC集群${i+1}`,
                         businessType: 'nas',
                         platform: 'x86',
+                        clusterRole: i === 0 ? '9000纳管本端集群' : '9000纳管远端集群',
                         storageImage: 'euler8',
                         clientImage: 'ubuntu',
                         enableReplication: true,
+                        enableTiering: true,
                         nodeInfo: [
                             { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 3 },
                             { nodeType: 'client', clientServices: i === 0 ? ['nfs', 'obs', 'dpc', 'fi'] : ['nfs', 'obs', 'dpc'], nodeCount: 1 }
@@ -359,9 +383,11 @@ const EnvironmentCreateForm = () => {
                         clusterName: `2GFS集群${i+1}`,
                         businessType: 'nas',
                         platform: 'x86',
+                        clusterRole: i === 0 ? 'cps本端集群' : '9000纳管远端集群',
                         storageImage: 'euler8',
                         clientImage: 'ubuntu',
                         enableReplication: true,
+                        enableTiering: true,
                         nodeInfo: [
                             { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 3 },
                             { nodeType: 'client', clientServices: i === 0 ? ['nfs', 'obs', 'dpc', 'fi'] : ['nfs', 'obs', 'dpc'], nodeCount: 1 }
@@ -381,9 +407,11 @@ const EnvironmentCreateForm = () => {
                         clusterName: `3GFS集群${i+1}`,
                         businessType: 'nas',
                         platform: 'x86',
+                        clusterRole: i === 0 ? 'cps本端集群' : '9000纳管远端集群',
                         storageImage: 'euler8',
                         clientImage: 'ubuntu',
                         enableReplication: true,
+                        enableTiering: true,
                         nodeInfo: [
                             { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 3 },
                             { nodeType: 'client', clientServices: i === 0 ? ['nfs', 'obs', 'dpc', 'fi'] : ['nfs', 'obs', 'dpc'], nodeCount: 1 }
@@ -406,6 +434,7 @@ const EnvironmentCreateForm = () => {
             setNodeStats(calculateNodeStats(values));
             message.success(`已应用${template}配置模板`);
             setActiveTemplate(template);
+            setTemplateDescription(templateDescriptions[template] || '');
         }
     }, [calculateNodeStats, form]);
 
@@ -512,19 +541,19 @@ const EnvironmentCreateForm = () => {
             <span style={{ marginRight: 8 }}>集群 #{clusterIndex}</span>
             <span style={{ marginRight: 8 }}>存储: {stats.storageCount}</span>
             <span style={{ marginRight: 8 }}>客户端: {stats.clientCount}</span>
-            {onRemove && (
-                <Button
-                    type="text"
-                    danger
-                    icon={<MinusCircleOutlined />}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onRemove();
-                    }}
-                    size="small"
-                    style={{ padding: '0 4px', height: 'auto' }}
-                />
-            )}
+            <Button
+                type="primary"
+                danger
+                icon={<MinusCircleOutlined />}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove();
+                }}
+                size="small"
+                style={{ padding: '0 4px', height: 'auto' }}
+            >
+                删除集群
+            </Button>
         </div>
     ));
 
@@ -545,7 +574,7 @@ const EnvironmentCreateForm = () => {
 
         return (
             <Row gutter={16}>
-                <Col span={12}>
+                <Col span={8}>
                     <Form.Item
                         {...nodeRestField}
                         label="节点角色"
@@ -560,7 +589,7 @@ const EnvironmentCreateForm = () => {
                         </Select>
                     </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col span={8}>
                     <Form.Item
                         {...nodeRestField}
                         label="节点数量"
@@ -632,6 +661,7 @@ const EnvironmentCreateForm = () => {
     ));
 
     // 节点项组件
+    // 节点项组件
     const NodeItem = React.memo(({ nodeName, nodeRestField, nodeTypeOptions, businessType, form, clusterName, onRemove, vbsSeparateDeploy }) => {
         const nodeType = Form.useWatch(['clusterInfo', clusterName, 'nodeInfo', nodeName, 'nodeType'], form);
 
@@ -653,46 +683,126 @@ const EnvironmentCreateForm = () => {
 
         return (
             <div style={{ marginBottom: 8, padding: 8, background: '#f5f5f5', borderRadius: 4 }}>
-                <Space direction="vertical" style={{ width: '100%' }}>
-                    <Space align="baseline" style={{ marginBottom: 4 }}>
+                <Row gutter={16} align="middle">
+                    {/* 节点大类 */}
+                    <Col span={6}>
                         <Form.Item
                             {...nodeRestField}
                             name={[nodeName, 'nodeType']}
                             rules={[{ required: true, message: '请选择节点大类!' }]}
                             style={{ marginBottom: 0 }}
+                            label="节点大类"
+                            labelCol={{ span: 24 }}
                         >
                             <Select
                                 placeholder="选择节点大类"
-                                style={{ width: 200 }}
+                                style={{ width: '100%' }}
                                 onChange={resetNodeFields}
                             >
                                 {nodeTypeOptions}
                             </Select>
                         </Form.Item>
-                        <Button
-                            type="text"
-                            danger
-                            icon={<MinusCircleOutlined />}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onRemove();
-                            }}
-                            size="small"
-                        />
-                    </Space>
+                    </Col>
 
                     {nodeType === 'storage' && (
-                        <StorageNodeConfig
-                            nodeName={nodeName}
-                            nodeRestField={nodeRestField}
-                            businessType={businessType}
-                            vbsSeparateDeploy={vbsSeparateDeploy}
-                            form={form}
-                            clusterName={clusterName}
-                        />
+                        <>
+                            {/* 存储节点角色 */}
+                            <Col span={6}>
+                                <Form.Item
+                                    {...nodeRestField}
+                                    name={[nodeName, 'nodeRole']}
+                                    rules={[{ required: true, message: '请选择节点角色!' }]}
+                                    style={{ marginBottom: 0 }}
+                                    label="节点角色"
+                                    labelCol={{ span: 24 }}
+                                >
+                                    <Select placeholder="选择节点角色">
+                                        {getNodeRoleOptions(businessType, vbsSeparateDeploy)}
+                                    </Select>
+                                </Form.Item>
+                            </Col>
+                            {/* 存储节点数量 */}
+                            <Col span={5}>
+                                <Form.Item
+                                    {...nodeRestField}
+                                    name={[nodeName, 'nodeCount']}
+                                    rules={[{ required: true, message: '请输入节点数量!' }]}
+                                    style={{ marginBottom: 0 }}
+                                    label="节点数量"
+                                    labelCol={{ span: 24 }}
+                                >
+                                    <InputNumber
+                                        placeholder="数量"
+                                        style={{ width: '100%' }}
+                                        min={1}
+                                        max={100}
+                                    />
+                                </Form.Item>
+                            </Col>
+                        </>
                     )}
-                    {nodeType === 'client' && <ClientNodeConfig nodeName={nodeName} nodeRestField={nodeRestField} />}
-                </Space>
+
+                    {nodeType === 'client' && (
+                        <>
+                            {/* 客户端服务选择 - 优化布局 */}
+                            <Col span={10}>
+                                <Form.Item
+                                    {...nodeRestField}
+                                    name={[nodeName, 'clientServices']}
+                                    rules={[{ required: true, message: '请选择业务服务!' }]}
+                                    style={{ marginBottom: 0 }}
+                                    label="业务服务"
+                                    labelCol={{ span: 24 }}
+                                >
+                                    <Checkbox.Group
+                                        options={[
+                                            { label: 'NFS', value: 'nfs' },
+                                            { label: 'OBS', value: 'obs' },
+                                            { label: 'DPC', value: 'dpc' },
+                                            { label: 'FI', value: 'fi' }
+                                        ]}
+                                        style={{ display: 'flex', justifyContent: 'space-between' }}
+                                    />
+                                </Form.Item>
+                            </Col>
+                            {/* 客户端节点数量 - 与存储节点数量对齐 */}
+                            <Col span={3}>
+                                <Form.Item
+                                    {...nodeRestField}
+                                    name={[nodeName, 'nodeCount']}
+                                    rules={[{ required: true, message: '请输入节点数量!' }]}
+                                    style={{ marginBottom: 0 }}
+                                    label="节点数量"
+                                    labelCol={{ span: 24 }}
+                                >
+                                    <InputNumber
+                                        placeholder="数量"
+                                        style={{ width: '100%' }}
+                                        min={1}
+                                        max={100}
+                                    />
+                                </Form.Item>
+                            </Col>
+                        </>
+                    )}
+
+                    {/* 删除按钮 */}
+                    <Col span={2}>
+                        <Form.Item style={{ marginBottom: 0 }}>
+                            <Button
+                                type="text"
+                                danger
+                                icon={<MinusCircleOutlined />}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRemove();
+                                }}
+                                size="small"
+                                style={{ marginTop: 24 }}
+                            />
+                        </Form.Item>
+                    </Col>
+                </Row>
             </div>
         );
     });
@@ -865,12 +975,27 @@ const EnvironmentCreateForm = () => {
                                     </Checkbox>
                                 </Form.Item>
                             </Col>
+                            <Col span={6}>
+                                <Form.Item
+                                    {...restField}
+                                    name={[name, 'enableTiering']}
+                                    style={{ marginBottom: 8 }}
+                                    valuePropName="checked"
+                                >
+                                    <Checkbox>
+                                        开启分级服务
+                                        <Tooltip title="开启分级服务需要额外的存储空间">
+                                            <QuestionCircleOutlined style={{ marginLeft: 4 }} />
+                                        </Tooltip>
+                                    </Checkbox>
+                                </Form.Item>
+                            </Col>
                         </>
                     )}
                 </Row>
 
                 <Row gutter={16} style={{ marginBottom: 8 }}>
-                    <Col span={12}>
+                    <Col span={8}>
                         <Form.Item
                             {...restField}
                             label="业务大类"
@@ -885,7 +1010,7 @@ const EnvironmentCreateForm = () => {
                             </Select>
                         </Form.Item>
                     </Col>
-                    <Col span={12}>
+                    <Col span={8}>
                         <Form.Item
                             {...restField}
                             label="平台"
@@ -896,6 +1021,22 @@ const EnvironmentCreateForm = () => {
                             <Select placeholder="请选择平台">
                                 <Option value="x86">x86</Option>
                                 <Option value="arm">ARM</Option>
+                            </Select>
+                        </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                        <Form.Item
+                            {...restField}
+                            label="集群角色"
+                            name={[name, 'clusterRole']}
+                            rules={[{ required: true, message: '请选择集群角色!' }]}
+                            style={{ marginBottom: 8 }}
+                        >
+                            <Select placeholder="请选择集群角色">
+                                <Option value="默认集群">默认集群</Option>
+                                <Option value="9000纳管本端集群">9000纳管本端集群</Option>
+                                <Option value="9000纳管远端集群">9000纳管远端集群</Option>
+                                <Option value="cps本端集群">cps本端集群</Option>
                             </Select>
                         </Form.Item>
                     </Col>
@@ -1084,6 +1225,7 @@ const EnvironmentCreateForm = () => {
         const vbsSeparateDeploy = Form.useWatch(['clusterInfo', name, 'vbsSeparateDeploy'], form);
         const enableMetadata = Form.useWatch(['clusterInfo', name, 'enableMetadata'], form);
         const enableReplication = Form.useWatch(['clusterInfo', name, 'enableReplication'], form);
+        const enableTiering = Form.useWatch(['clusterInfo', name, 'enableTiering'], form);
 
         const hasStorageNode = useMemo(() => {
             const nodeInfo = form.getFieldValue(['clusterInfo', name, 'nodeInfo']);
@@ -1150,8 +1292,8 @@ const EnvironmentCreateForm = () => {
                                           removeFavorite
                                       }) => {
         return (
-            <>
-                <Card title="典型配置" style={{ marginBottom: 12 }} bodyStyle={{ padding: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <Card title="典型配置" bodyStyle={{ padding: 12 }}>
                     <Row gutter={[8, 8]}>
                         {templateButtons.map(template => (
                             <Col span={12} key={template}>
@@ -1170,7 +1312,6 @@ const EnvironmentCreateForm = () => {
 
                 <Card
                     title="用户收藏配置"
-                    style={{ marginBottom: 0 }}
                     bodyStyle={{ padding: 12 }}
                     extra={
                         <Space size="small">
@@ -1250,7 +1391,13 @@ const EnvironmentCreateForm = () => {
                         </Space>
                     )}
                 </Card>
-            </>
+
+                <Card title="配置描述" bodyStyle={{ padding: 12 }}>
+                    <div style={{ minHeight: 100, padding: 8, background: '#f9f9f9', borderRadius: 4 }}>
+                        {templateDescription || '请选择典型配置查看详细描述'}
+                    </div>
+                </Card>
+            </div>
         );
     });
 
@@ -1292,12 +1439,14 @@ const EnvironmentCreateForm = () => {
                                                 clusterName: '',
                                                 businessType: undefined,
                                                 platform: undefined,
+                                                clusterRole: '默认集群',
                                                 storageImage: undefined,
                                                 clientImage: undefined,
                                                 nodeInfo: [{ nodeType: undefined }],
                                                 vbsSeparateDeploy: false,
                                                 enableMetadata: false,
-                                                enableReplication: false
+                                                enableReplication: false,
+                                                enableTiering: false
                                             });
                                             setClusterCount(clusterCount + 1);
                                         }}
