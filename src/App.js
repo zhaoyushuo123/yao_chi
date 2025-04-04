@@ -684,21 +684,17 @@ const EnvironmentCreateForm = () => {
         return (
             <div style={{ marginBottom: 8, padding: 8, background: '#f5f5f5', borderRadius: 4 }}>
                 <Row gutter={16} align="middle">
-                    {/* 节点大类 - 所有节点类型共有 */}
-                    <Col span={5}>
+                    {/* 节点大类 */}
+                    <Col span={4}>
                         <Form.Item
                             {...nodeRestField}
                             name={[nodeName, 'nodeType']}
                             rules={[{ required: true, message: '请选择节点大类!' }]}
-                            style={{ marginBottom: 0 }}
                             label="节点大类"
                             labelCol={{ span: 24 }}
+                            style={{ marginBottom: 0 }}
                         >
-                            <Select
-                                placeholder="选择节点大类"
-                                style={{ width: '100%' }}
-                                onChange={resetNodeFields}
-                            >
+                            <Select placeholder="选择节点大类" style={{ width: '100%' }}>
                                 {nodeTypeOptions}
                             </Select>
                         </Form.Item>
@@ -706,99 +702,110 @@ const EnvironmentCreateForm = () => {
 
                     {nodeType === 'storage' && (
                         <>
-                            {/* 存储节点角色 - 加长宽度 */}
-                            <Col span={8}>
+                            {/* 存储节点角色 - 12列 */}
+                            <Col span={12}>
                                 <Form.Item
                                     {...nodeRestField}
                                     name={[nodeName, 'nodeRole']}
                                     rules={[{ required: true, message: '请选择节点角色!' }]}
-                                    style={{ marginBottom: 0 }}
                                     label="节点角色"
                                     labelCol={{ span: 24 }}
+                                    style={{ marginBottom: 0 }}
                                 >
-                                    <Select
-                                        placeholder="选择节点角色"
-                                        style={{ width: '100%' }}
-                                    >
+                                    <Select placeholder="选择节点角色" style={{ width: '100%' }}>
                                         {getNodeRoleOptions(businessType, vbsSeparateDeploy)}
                                     </Select>
                                 </Form.Item>
                             </Col>
-                            {/* 存储节点数量 */}
-                            <Col span={5}>
-                                <Form.Item
-                                    {...nodeRestField}
-                                    name={[nodeName, 'nodeCount']}
-                                    rules={[{ required: true, message: '请输入节点数量!' }]}
-                                    style={{ marginBottom: 0 }}
-                                    label="节点数量"
-                                    labelCol={{ span: 24 }}
-                                >
-                                    <InputNumber
-                                        placeholder="数量"
-                                        style={{ width: '100%' }}
-                                        min={1}
-                                        max={100}
-                                    />
-                                </Form.Item>
+                            {/* 存储节点数量 - 精确右对齐 */}
+                            <Col span={6}>
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'flex-end',
+                                    paddingRight: 8
+                                }}>
+                                    <Form.Item
+                                        {...nodeRestField}
+                                        name={[nodeName, 'nodeCount']}
+                                        rules={[{ required: true, message: '请输入节点数量!' }]}
+                                        label="节点数量"
+                                        labelCol={{ span: 24 }}
+                                        style={{ marginBottom: 0, width: '100%' }}
+                                    >
+                                        <InputNumber
+                                            placeholder="数量"
+                                            style={{
+                                                width: '100%',
+                                                textAlign: 'right'
+                                            }}
+                                            min={1}
+                                            max={100}
+                                        />
+                                    </Form.Item>
+                                </div>
                             </Col>
                         </>
                     )}
 
                     {nodeType === 'client' && (
                         <>
-                            {/* 客户端业务服务 - 紧凑排列 */}
-                            <Col span={10}>
+                            {/* 客户端业务服务 - 12列 */}
+                            <Col span={12}>
                                 <Form.Item
                                     {...nodeRestField}
                                     name={[nodeName, 'clientServices']}
                                     rules={[{ required: true, message: '请选择业务服务!' }]}
-                                    style={{ marginBottom: 0 }}
                                     label="业务服务"
                                     labelCol={{ span: 24 }}
+                                    style={{ marginBottom: 0 }}
                                 >
-                                    <div style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        width: '100%',
-                                        gap: '4px' // 缩小选项间距
-                                    }}>
+                                    <Space size={8} style={{ display: 'flex', alignItems: 'center' }}>
                                         <Checkbox value="nfs">NFS</Checkbox>
                                         <Checkbox value="obs">OBS</Checkbox>
                                         <Checkbox value="dpc">DPC</Checkbox>
                                         <Checkbox value="fi">FI</Checkbox>
                                         <Checkbox value="hdfs_fi">
-                                            <span>HDFS_FI</span>
-                                            <Tooltip title="HDFS_FI部署时，即使勾选了NFS OBS或DPC，也只有第三个FI客户端提供NFS OBS DPC协议">
-                                                <QuestionCircleOutlined style={{ marginLeft: 4 }} />
-                                            </Tooltip>
+                                            <Space size={4}>
+                                                HDFS_FI
+                                                <Tooltip title="HDFS_FI部署时，即使勾选了NFS OBS或DPC，也只有第三个FI客户端提供NFS OBS DPC协议">
+                                                    <QuestionCircleOutlined />
+                                                </Tooltip>
+                                            </Space>
                                         </Checkbox>
-                                    </div>
+                                    </Space>
                                 </Form.Item>
                             </Col>
-                            {/* 客户端节点数量 - 与存储节点数量严格对齐 */}
-                            <Col span={5}>
-                                <Form.Item
-                                    {...nodeRestField}
-                                    name={[nodeName, 'nodeCount']}
-                                    rules={[{ required: true, message: '请输入节点数量!' }]}
-                                    style={{ marginBottom: 0 }}
-                                    label="节点数量"
-                                    labelCol={{ span: 24 }}
-                                >
-                                    <InputNumber
-                                        placeholder="数量"
-                                        style={{ width: '100%' }}
-                                        min={1}
-                                        max={100}
-                                    />
-                                </Form.Item>
+                            {/* 客户端节点数量 - 精确右对齐 */}
+                            <Col span={6}>
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'flex-end',
+                                    paddingRight: 8
+                                }}>
+                                    <Form.Item
+                                        {...nodeRestField}
+                                        name={[nodeName, 'nodeCount']}
+                                        rules={[{ required: true, message: '请输入节点数量!' }]}
+                                        label="节点数量"
+                                        labelCol={{ span: 24 }}
+                                        style={{ marginBottom: 0, width: '100%' }}
+                                    >
+                                        <InputNumber
+                                            placeholder="数量"
+                                            style={{
+                                                width: '100%',
+                                                textAlign: 'right'
+                                            }}
+                                            min={1}
+                                            max={100}
+                                        />
+                                    </Form.Item>
+                                </div>
                             </Col>
                         </>
                     )}
 
-                    {/* 删除按钮 - 固定宽度 */}
+                    {/* 删除按钮 */}
                     <Col span={2}>
                         <Button
                             type="text"
