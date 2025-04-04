@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Input, Button, Select, Row, Col, message, Space, InputNumber, Checkbox, Card, Upload, Modal } from 'antd';
-import { PlusOutlined, MinusCircleOutlined, UploadOutlined, StarOutlined, StarFilled, DownloadOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Form, Input, Button, Select, Row, Col, message, Space, InputNumber, Checkbox, Card, Upload, Modal, Tooltip, Radio } from 'antd';
+import { PlusOutlined, MinusCircleOutlined, UploadOutlined, StarOutlined, StarFilled, DownloadOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 
 const { Option } = Select;
 
@@ -12,6 +12,8 @@ const EnvironmentCreateForm = () => {
     const [nodeStats, setNodeStats] = useState([]);
     const [isFavoriteModalVisible, setIsFavoriteModalVisible] = useState(false);
     const [favoriteName, setFavoriteName] = useState('');
+    const [showClientImage, setShowClientImage] = useState(false);
+    const inputTimerRef = useRef(null);
 
     // 初始化默认展示一个集群
     useEffect(() => {
@@ -24,7 +26,10 @@ const EnvironmentCreateForm = () => {
                 clientImage: undefined,
                 nodeInfo: [{
                     nodeType: undefined
-                }]
+                }],
+                vbsSeparateDeploy: false,
+                enableMetadata: false,
+                enableReplication: false
             }]
         });
         setClusterCount(1);
@@ -35,6 +40,11 @@ const EnvironmentCreateForm = () => {
         if (savedFavorites) {
             setFavoriteConfigs(JSON.parse(savedFavorites));
         }
+
+        return () => {
+            // 组件卸载时清除定时器
+            clearTimeout(inputTimerRef.current);
+        };
     }, [form]);
 
     // 计算节点统计信息
@@ -68,7 +78,16 @@ const EnvironmentCreateForm = () => {
     const handleClusterChange = (changedValues, allValues) => {
         const count = allValues.clusterInfo?.length || 0;
         setClusterCount(count);
-        setNodeStats(calculateNodeStats(allValues));
+
+        // 优化输入框性能，避免频繁计算
+        const newStats = calculateNodeStats(allValues);
+        setNodeStats(newStats);
+
+        // 检查是否需要显示客户端镜像
+        const hasClientNodes = allValues.clusterInfo?.some(cluster =>
+            cluster.nodeInfo?.some(node => node?.nodeType === 'client')
+        );
+        setShowClientImage(hasClientNodes);
 
         // 处理业务类型变化的情况
         if (changedValues.clusterInfo) {
@@ -130,6 +149,34 @@ const EnvironmentCreateForm = () => {
                         });
                     }
                 }
+
+                // 确保切换业务类型时节点信息同步更新
+                const businessType = form.getFieldValue(['clusterInfo', clusterIndex, 'businessType']);
+                const nodeInfo = form.getFieldValue(['clusterInfo', clusterIndex, 'nodeInfo']) || [];
+
+                if (businessType === 'dme') {
+                    const updatedNodeInfo = nodeInfo.filter(node => node?.nodeType !== 'storage');
+                    if (updatedNodeInfo.length !== nodeInfo.length) {
+                        form.setFieldsValue({
+                            clusterInfo: {
+                                [clusterIndex]: {
+                                    nodeInfo: updatedNodeInfo
+                                }
+                            }
+                        });
+                    }
+                } else if (businessType === 'block') {
+                    const updatedNodeInfo = nodeInfo.filter(node => node?.nodeType !== 'client');
+                    if (updatedNodeInfo.length !== nodeInfo.length) {
+                        form.setFieldsValue({
+                            clusterInfo: {
+                                [clusterIndex]: {
+                                    nodeInfo: updatedNodeInfo
+                                }
+                            }
+                        });
+                    }
+                }
             });
         }
     };
@@ -166,6 +213,25 @@ const EnvironmentCreateForm = () => {
             <Option key="ubuntu" value="ubuntu">Ubuntu</Option>,
             <Option key="centos77" value="centos77">CentOS 7.7</Option>
         ];
+    };
+
+    const getNodeRoleOptions = (businessType, vbsSeparateDeploy) => {
+        const options = [];
+
+        if (businessType === 'block') {
+            options.push(<Option key="fsm" value="fsm">FSM</Option>);
+            options.push(<Option key="fsa" value="fsa">FSA</Option>);
+            options.push(<Option key="vbs" value="vbs">VBS</Option>);
+
+            if (vbsSeparateDeploy) {
+                options.push(<Option key="vbs_separate" value="vbs_separate">VBS分离</Option>);
+            }
+        } else {
+            options.push(<Option key="fsm" value="fsm">FSM</Option>);
+            options.push(<Option key="fsa" value="fsa">FSA</Option>);
+        }
+
+        return options;
     };
 
     const applyTemplate = (template, config) => {
@@ -232,6 +298,116 @@ const EnvironmentCreateForm = () => {
                             { nodeType: 'client', clientServices: ['nfs'], nodeCount: 2 }
                         ]
                     }];
+                    break;
+                case '6NODE_VBS_Sperate':
+                    values.clusterInfo = [{
+                        clusterName: '6节点VBS分离集群',
+                        businessType: 'block',
+                        platform: 'x86',
+                        storageImage: 'euler8',
+                        vbsSeparateDeploy: true,
+                        nodeInfo: [
+                            { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 2 },
+                            { nodeType: 'storage', nodeRole: 'fsa', nodeCount: 1 },
+                            { nodeType: 'storage', nodeRole: 'vbs', nodeCount: 3 }
+                        ],
+                        diskInfo: [
+                            { diskType: 'ssd', diskSize: 512, diskCount: 12 }
+                        ],
+                        networkInfo: {
+                            nicCount: 4,
+                            nicType: 'tcp',
+                            ipCount: 5
+                        }
+                    }];
+                    break;
+                case '2DC':
+                    values.clusterInfo = Array(2).fill().map((_, i) => ({
+                        clusterName: `2DC集群${i+1}`,
+                        businessType: 'nas',
+                        platform: 'x86',
+                        storageImage: 'euler8',
+                        clientImage: 'ubuntu',
+                        enableReplication: true,
+                        nodeInfo: [
+                            { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 3 },
+                            { nodeType: 'client', clientServices: i === 0 ? ['nfs', 'obs', 'dpc', 'fi'] : ['nfs', 'obs', 'dpc'], nodeCount: 1 }
+                        ],
+                        diskInfo: [
+                            { diskType: 'ssd', diskSize: 200, diskCount: 6 }
+                        ],
+                        networkInfo: {
+                            nicCount: 4,
+                            nicType: 'tcp',
+                            ipCount: 5
+                        }
+                    }));
+                    break;
+                case '3DC':
+                    values.clusterInfo = Array(3).fill().map((_, i) => ({
+                        clusterName: `3DC集群${i+1}`,
+                        businessType: 'nas',
+                        platform: 'x86',
+                        storageImage: 'euler8',
+                        clientImage: 'ubuntu',
+                        enableReplication: true,
+                        nodeInfo: [
+                            { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 3 },
+                            { nodeType: 'client', clientServices: i === 0 ? ['nfs', 'obs', 'dpc', 'fi'] : ['nfs', 'obs', 'dpc'], nodeCount: 1 }
+                        ],
+                        diskInfo: [
+                            { diskType: 'ssd', diskSize: 200, diskCount: 6 }
+                        ],
+                        networkInfo: {
+                            nicCount: 4,
+                            nicType: 'tcp',
+                            ipCount: 5
+                        }
+                    }));
+                    break;
+                case '2GFS':
+                    values.clusterInfo = Array(2).fill().map((_, i) => ({
+                        clusterName: `2GFS集群${i+1}`,
+                        businessType: 'nas',
+                        platform: 'x86',
+                        storageImage: 'euler8',
+                        clientImage: 'ubuntu',
+                        enableReplication: true,
+                        nodeInfo: [
+                            { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 3 },
+                            { nodeType: 'client', clientServices: i === 0 ? ['nfs', 'obs', 'dpc', 'fi'] : ['nfs', 'obs', 'dpc'], nodeCount: 1 }
+                        ],
+                        diskInfo: [
+                            { diskType: 'ssd', diskSize: 200, diskCount: 6 }
+                        ],
+                        networkInfo: {
+                            nicCount: 4,
+                            nicType: 'tcp',
+                            ipCount: 5
+                        }
+                    }));
+                    break;
+                case '3GFS':
+                    values.clusterInfo = Array(3).fill().map((_, i) => ({
+                        clusterName: `3GFS集群${i+1}`,
+                        businessType: 'nas',
+                        platform: 'x86',
+                        storageImage: 'euler8',
+                        clientImage: 'ubuntu',
+                        enableReplication: true,
+                        nodeInfo: [
+                            { nodeType: 'storage', nodeRole: 'fsm', nodeCount: 3 },
+                            { nodeType: 'client', clientServices: i === 0 ? ['nfs', 'obs', 'dpc', 'fi'] : ['nfs', 'obs', 'dpc'], nodeCount: 1 }
+                        ],
+                        diskInfo: [
+                            { diskType: 'ssd', diskSize: 200, diskCount: 6 }
+                        ],
+                        networkInfo: {
+                            nicCount: 4,
+                            nicType: 'tcp',
+                            ipCount: 5
+                        }
+                    }));
                     break;
             }
 
@@ -321,7 +497,7 @@ const EnvironmentCreateForm = () => {
         '3NODE_1Client', '3NODE_3Client', '3NODE_1DPC', '3NODE_3DPC',
         '6NODE_1Client', '9NODE_1Client', '9000纳管',
         '3NODE_1FI', '3NODE_HDFS_FI', '3NODE_CONVERGE_FI', '3NODE_CONVERGE_HDFS_FI',
-        '2DC', '3DC', '2GFS', '3GFS', 'BLOCK_Template', 'DME_Template'
+        '2DC', '3DC', '2GFS', '3GFS', 'BLOCK_Template', 'DME_Template', '6NODE_VBS_Sperate'
     ];
 
     const ClusterHeader = ({ clusterIndex, stats, onRemove }) => (
@@ -339,40 +515,87 @@ const EnvironmentCreateForm = () => {
             <span>客户端: {stats.clientCount}</span>
             {onRemove && (
                 <MinusCircleOutlined
-                    style={{ fontSize: 14, color: '#ff4d4f', marginLeft: 8 }}
-                    onClick={onRemove}
+                    style={{
+                        fontSize: 14,
+                        color: '#ff4d4f',
+                        marginLeft: 8,
+                        cursor: 'pointer'
+                    }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onRemove();
+                    }}
                 />
             )}
         </div>
     );
 
-    const StorageNodeConfig = ({ nodeName, nodeRestField }) => (
-        <Row gutter={16}>
-            <Col span={12}>
-                <Form.Item
-                    {...nodeRestField}
-                    label="节点角色"
-                    name={[nodeName, 'nodeRole']}
-                    rules={[{ required: true, message: '请选择节点角色!' }]}
-                >
-                    <Select placeholder="选择节点角色">
-                        <Option value="fsm">FSM</Option>
-                        <Option value="fsa">FSA</Option>
-                    </Select>
-                </Form.Item>
-            </Col>
-            <Col span={12}>
-                <Form.Item
-                    {...nodeRestField}
-                    label="节点数量"
-                    name={[nodeName, 'nodeCount']}
-                    rules={[{ required: true, message: '请输入节点数量!', type: 'number', min: 1, max: 100 }]}
-                >
-                    <InputNumber placeholder="输入节点数量" style={{ width: '100%' }} min={1} max={100} />
-                </Form.Item>
-            </Col>
-        </Row>
-    );
+    const StorageNodeConfig = ({ nodeName, nodeRestField, businessType, vbsSeparateDeploy, form, clusterName }) => {
+        const validateVBSNodes = useCallback(() => {
+            if (!vbsSeparateDeploy) return;
+
+            const nodeInfo = form.getFieldValue(['clusterInfo', clusterName, 'nodeInfo']) || [];
+            const vbsNodes = nodeInfo.filter(node =>
+                node?.nodeType === 'storage' && node?.nodeRole === 'vbs'
+            ).reduce((sum, node) => sum + (node.nodeCount || 0), 0);
+
+            if (vbsNodes < 6) {
+                message.warning('VBS分离部署需要至少6个VBS节点');
+            }
+        }, [vbsSeparateDeploy, form, clusterName]);
+
+        return (
+            <Row gutter={16}>
+                <Col span={12}>
+                    <Form.Item
+                        {...nodeRestField}
+                        label="节点角色"
+                        name={[nodeName, 'nodeRole']}
+                        rules={[{ required: true, message: '请选择节点角色!' }]}
+                    >
+                        <Select
+                            placeholder="选择节点角色"
+                            onChange={validateVBSNodes}
+                        >
+                            {getNodeRoleOptions(businessType, vbsSeparateDeploy)}
+                        </Select>
+                    </Form.Item>
+                </Col>
+                <Col span={12}>
+                    <Form.Item
+                        {...nodeRestField}
+                        label="节点数量"
+                        name={[nodeName, 'nodeCount']}
+                        rules={[
+                            { required: true, message: '请输入节点数量!', type: 'number', min: 1, max: 100 },
+                            ({ getFieldValue }) => ({
+                                validator(_, value) {
+                                    if (!value || value < 1) {
+                                        return Promise.reject(new Error('请输入有效节点数量'));
+                                    }
+                                    const nodeRole = getFieldValue(['clusterInfo', clusterName, 'nodeInfo', nodeName, 'nodeRole']);
+                                    const vbsSeparate = getFieldValue(['clusterInfo', clusterName, 'vbsSeparateDeploy']);
+
+                                    if (nodeRole === 'vbs' && vbsSeparate && value < 6) {
+                                        return Promise.reject(new Error('VBS分离部署需要至少6个节点'));
+                                    }
+                                    return Promise.resolve();
+                                },
+                            }),
+                        ]}
+                    >
+                        <InputNumber
+                            placeholder="输入节点数量"
+                            style={{ width: '100%' }}
+                            min={1}
+                            max={100}
+                            onChange={validateVBSNodes}
+                        />
+                    </Form.Item>
+                </Col>
+            </Row>
+        );
+    };
 
     const ClientNodeConfig = ({ nodeName, nodeRestField }) => (
         <>
@@ -408,7 +631,7 @@ const EnvironmentCreateForm = () => {
         </>
     );
 
-    const NodeItem = ({ nodeName, nodeRestField, nodeTypeOptions, businessType, form, clusterName, onRemove }) => {
+    const NodeItem = ({ nodeName, nodeRestField, nodeTypeOptions, businessType, form, clusterName, onRemove, vbsSeparateDeploy }) => {
         const nodeType = Form.useWatch(['clusterInfo', clusterName, 'nodeInfo', nodeName, 'nodeType'], form);
 
         const resetNodeFields = () => {
@@ -446,116 +669,236 @@ const EnvironmentCreateForm = () => {
                             </Select>
                         </Form.Item>
                         <MinusCircleOutlined
-                            style={{ fontSize: 14, color: '#ff4d4f' }}
-                            onClick={onRemove}
+                            style={{ fontSize: 14, color: '#ff4d4f', cursor: 'pointer' }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onRemove();
+                            }}
                         />
                     </Space>
 
-                    {nodeType === 'storage' && <StorageNodeConfig nodeName={nodeName} nodeRestField={nodeRestField} />}
+                    {nodeType === 'storage' && (
+                        <StorageNodeConfig
+                            nodeName={nodeName}
+                            nodeRestField={nodeRestField}
+                            businessType={businessType}
+                            vbsSeparateDeploy={vbsSeparateDeploy}
+                            form={form}
+                            clusterName={clusterName}
+                        />
+                    )}
                     {nodeType === 'client' && <ClientNodeConfig nodeName={nodeName} nodeRestField={nodeRestField} />}
                 </Space>
             </div>
         );
     };
 
-    const DiskItem = ({ diskName, diskRestField, onRemove }) => (
-        <div style={{ marginBottom: 8, padding: 8, background: '#f0f0f0', borderRadius: 4 }}>
-            <Row gutter={16}>
-                <Col span={8}>
-                    <Form.Item
-                        {...diskRestField}
-                        label="硬盘类型"
-                        name={[diskName, 'diskType']}
-                        rules={[{ required: true, message: '请选择硬盘类型!' }]}
-                    >
-                        <Select placeholder="选择硬盘类型">
-                            <Option value="ssd">SSD</Option>
-                            <Option value="hdd">HDD</Option>
-                            <Option value="nvme">NVMe</Option>
-                        </Select>
-                    </Form.Item>
-                </Col>
-                <Col span={8}>
-                    <Form.Item
-                        {...diskRestField}
-                        label="硬盘容量(GB)"
-                        name={[diskName, 'diskSize']}
-                        rules={[{ required: true, message: '请输入硬盘容量!', type: 'number', min: 1, max: 32768 }]}
-                    >
-                        <InputNumber placeholder="输入容量" style={{ width: '100%' }} min={1} max={32768} />
-                    </Form.Item>
-                </Col>
-                <Col span={7}>
-                    <Form.Item
-                        {...diskRestField}
-                        label="硬盘数量"
-                        name={[diskName, 'diskCount']}
-                        rules={[{ required: true, message: '请输入硬盘数量!', type: 'number', min: 1, max: 100 }]}
-                    >
-                        <InputNumber placeholder="输入数量" style={{ width: '100%' }} min={1} max={100} />
-                    </Form.Item>
-                </Col>
-                <Col span={1}>
-                    <MinusCircleOutlined
-                        style={{ marginTop: 24, fontSize: 14, color: '#ff4d4f' }}
-                        onClick={onRemove}
-                    />
-                </Col>
-            </Row>
-        </div>
-    );
+    const DiskItem = ({ diskName, diskRestField, onRemove, enableMetadata, enableReplication }) => {
+        const getDefaultDiskSize = () => {
+            if (enableMetadata || enableReplication) return 200;
+            return 80;
+        };
 
-    const ClusterBasicInfo = ({ name, restField }) => (
-        <>
-            <Row gutter={16} style={{ marginBottom: 8 }}>
-                <Col span={24}>
-                    <Form.Item
-                        {...restField}
-                        label="集群名称"
-                        name={[name, 'clusterName']}
-                        rules={[{ required: true, message: '请输入集群名称!' }]}
-                        style={{ marginBottom: 8 }}
-                    >
-                        <Input placeholder="请输入集群名称" />
-                    </Form.Item>
-                </Col>
-            </Row>
+        const getDefaultDiskCount = () => {
+            if (enableMetadata && enableReplication) return 6;
+            if (enableMetadata || enableReplication) return 5;
+            return 4;
+        };
 
-            <Row gutter={16} style={{ marginBottom: 8 }}>
-                <Col span={12}>
-                    <Form.Item
-                        {...restField}
-                        label="业务大类"
-                        name={[name, 'businessType']}
-                        rules={[{ required: true, message: '请选择业务大类!' }]}
-                        style={{ marginBottom: 8 }}
-                    >
-                        <Select placeholder="请选择业务大类">
-                            <Option value="block">Block</Option>
-                            <Option value="nas">NAS</Option>
-                            <Option value="dme">DME</Option>
-                        </Select>
-                    </Form.Item>
-                </Col>
-                <Col span={12}>
-                    <Form.Item
-                        {...restField}
-                        label="平台"
-                        name={[name, 'platform']}
-                        rules={[{ required: true, message: '请选择平台!' }]}
-                        style={{ marginBottom: 8 }}
-                    >
-                        <Select placeholder="请选择平台">
-                            <Option value="x86">x86</Option>
-                            <Option value="arm">ARM</Option>
-                        </Select>
-                    </Form.Item>
-                </Col>
-            </Row>
-        </>
-    );
+        return (
+            <div style={{ marginBottom: 8, padding: 8, background: '#f0f0f0', borderRadius: 4 }}>
+                <Row gutter={16}>
+                    <Col span={8}>
+                        <Form.Item
+                            {...diskRestField}
+                            label="硬盘类型"
+                            name={[diskName, 'diskType']}
+                            initialValue="ssd"
+                            rules={[{ required: true, message: '请选择硬盘类型!' }]}
+                        >
+                            <Select placeholder="选择硬盘类型">
+                                <Option value="ssd">SSD</Option>
+                                <Option value="hdd">HDD</Option>
+                                <Option value="nvme">NVMe</Option>
+                            </Select>
+                        </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                        <Form.Item
+                            {...diskRestField}
+                            label="硬盘容量(GB)"
+                            name={[diskName, 'diskSize']}
+                            initialValue={getDefaultDiskSize()}
+                            rules={[{ required: true, message: '请输入硬盘容量!', type: 'number', min: 1, max: 32768 }]}
+                        >
+                            <InputNumber placeholder="输入容量" style={{ width: '100%' }} min={1} max={32768} />
+                        </Form.Item>
+                    </Col>
+                    <Col span={7}>
+                        <Form.Item
+                            {...diskRestField}
+                            label="硬盘数量"
+                            name={[diskName, 'diskCount']}
+                            initialValue={getDefaultDiskCount()}
+                            rules={[{ required: true, message: '请输入硬盘数量!', type: 'number', min: 1, max: 100 }]}
+                        >
+                            <InputNumber placeholder="输入数量" style={{ width: '100%' }} min={1} max={100} />
+                        </Form.Item>
+                    </Col>
+                    <Col span={1}>
+                        <MinusCircleOutlined
+                            style={{ marginTop: 24, fontSize: 14, color: '#ff4d4f', cursor: 'pointer' }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onRemove();
+                            }}
+                        />
+                    </Col>
+                </Row>
+            </div>
+        );
+    };
 
-    const ClusterImageConfig = ({ name, restField, businessType, hasStorageNode }) => (
+    const ClusterBasicInfo = ({ name, restField, businessType }) => {
+        const [vbsSeparateDeploy, setVbsSeparateDeploy] = useState(false);
+
+        const handleVbsSeparateChange = (e) => {
+            const value = e.target.value;
+            setVbsSeparateDeploy(value);
+            form.setFieldsValue({
+                clusterInfo: {
+                    [name]: {
+                        vbsSeparateDeploy: value
+                    }
+                }
+            });
+
+            if (value) {
+                const nodeInfo = form.getFieldValue(['clusterInfo', name, 'nodeInfo']) || [];
+                const vbsNodes = nodeInfo.filter(node =>
+                    node?.nodeType === 'storage' && node?.nodeRole === 'vbs'
+                ).reduce((sum, node) => sum + (node.nodeCount || 0), 0);
+
+                if (vbsNodes < 6) {
+                    message.warning('VBS分离部署需要至少6个VBS节点');
+                }
+            }
+        };
+
+        return (
+            <>
+                <Row gutter={16} style={{ marginBottom: 8 }}>
+                    <Col span={businessType === 'block' ? 12 : businessType === 'nas' ? 8 : 24}>
+                        <Form.Item
+                            {...restField}
+                            label="集群名称"
+                            name={[name, 'clusterName']}
+                            rules={[{ required: true, message: '请输入集群名称!' }]}
+                            style={{ marginBottom: 8 }}
+                        >
+                            {/* 修复点：直接使用Input组件，不添加防抖处理，与合一环境名称输入框保持一致 */}
+                            <Input placeholder="请输入集群名称"  onChange={(e) => {
+                                form.setFieldsValue({
+                                    clusterInfo: {
+                                        [name]: {
+                                            clusterName: e.target.value
+                                        }
+                                    }
+                                });
+                            }}/>
+                        </Form.Item>
+                    </Col>
+                    {businessType === 'block' && (
+                        <Col span={4}>
+                            <Form.Item
+                                {...restField}
+                                name={[name, 'vbsSeparateDeploy']}
+                                style={{ marginBottom: 8 }}
+                            >
+                                <Radio.Group onChange={handleVbsSeparateChange} value={vbsSeparateDeploy}>
+                                    <Radio value={true}>
+                                        VBS分离部署
+                                        <Tooltip title="VBS分离部署需要至少6个VBS节点">
+                                            <QuestionCircleOutlined style={{ marginLeft: 4 }} />
+                                        </Tooltip>
+                                    </Radio>
+                                    <Radio value={false}>普通部署</Radio>
+                                </Radio.Group>
+                            </Form.Item>
+                        </Col>
+                    )}
+                    {businessType === 'nas' && (
+                        <>
+                            <Col span={4}>
+                                <Form.Item
+                                    {...restField}
+                                    name={[name, 'enableMetadata']}
+                                    style={{ marginBottom: 8 }}
+                                    valuePropName="checked"
+                                >
+                                    <Checkbox>
+                                        开启元数据服务
+                                        <Tooltip title="开启元数据服务需要更大的存储容量">
+                                            <QuestionCircleOutlined style={{ marginLeft: 4 }} />
+                                        </Tooltip>
+                                    </Checkbox>
+                                </Form.Item>
+                            </Col>
+                            <Col span={4}>
+                                <Form.Item
+                                    {...restField}
+                                    name={[name, 'enableReplication']}
+                                    style={{ marginBottom: 8 }}
+                                    valuePropName="checked"
+                                >
+                                    <Checkbox>
+                                        开启复制集群服务
+                                        <Tooltip title="开启复制集群服务需要更大的存储容量">
+                                            <QuestionCircleOutlined style={{ marginLeft: 4 }} />
+                                        </Tooltip>
+                                    </Checkbox>
+                                </Form.Item>
+                            </Col>
+                        </>
+                    )}
+                </Row>
+
+                <Row gutter={16} style={{ marginBottom: 8 }}>
+                    <Col span={12}>
+                        <Form.Item
+                            {...restField}
+                            label="业务大类"
+                            name={[name, 'businessType']}
+                            rules={[{ required: true, message: '请选择业务大类!' }]}
+                            style={{ marginBottom: 8 }}
+                        >
+                            <Select placeholder="请选择业务大类">
+                                <Option value="block">Block</Option>
+                                <Option value="nas">NAS</Option>
+                                <Option value="dme">DME</Option>
+                            </Select>
+                        </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                        <Form.Item
+                            {...restField}
+                            label="平台"
+                            name={[name, 'platform']}
+                            rules={[{ required: true, message: '请选择平台!' }]}
+                            style={{ marginBottom: 8 }}
+                        >
+                            <Select placeholder="请选择平台">
+                                <Option value="x86">x86</Option>
+                                <Option value="arm">ARM</Option>
+                            </Select>
+                        </Form.Item>
+                    </Col>
+                </Row>
+            </>
+        );
+    };
+
+    const ClusterImageConfig = ({ name, restField, businessType, hasStorageNode, showClientImage }) => (
         <Row gutter={16} style={{ marginBottom: 8 }}>
             {hasStorageNode && (
                 <Col span={12}>
@@ -572,23 +915,25 @@ const EnvironmentCreateForm = () => {
                     </Form.Item>
                 </Col>
             )}
-            <Col span={hasStorageNode ? 12 : 24}>
-                <Form.Item
-                    {...restField}
-                    label="客户端镜像"
-                    name={[name, 'clientImage']}
-                    rules={[{ required: true, message: '请选择客户端镜像!' }]}
-                    style={{ marginBottom: 8 }}
-                >
-                    <Select placeholder="选择客户端镜像版本">
-                        {getClientImageOptions(businessType)}
-                    </Select>
-                </Form.Item>
-            </Col>
+            {showClientImage && (
+                <Col span={hasStorageNode ? 12 : 24}>
+                    <Form.Item
+                        {...restField}
+                        label="客户端镜像"
+                        name={[name, 'clientImage']}
+                        rules={[{ required: true, message: '请选择客户端镜像!' }]}
+                        style={{ marginBottom: 8 }}
+                    >
+                        <Select placeholder="选择客户端镜像版本">
+                            {getClientImageOptions(businessType)}
+                        </Select>
+                    </Form.Item>
+                </Col>
+            )}
         </Row>
     );
 
-    const NodeInfoSection = ({ name, restField, businessType, form }) => {
+    const NodeInfoSection = ({ name, restField, businessType, form, vbsSeparateDeploy }) => {
         const nodeTypeOptions = getNodeTypeOptions(businessType);
 
         return (
@@ -606,6 +951,7 @@ const EnvironmentCreateForm = () => {
                                     form={form}
                                     clusterName={name}
                                     onRemove={() => nodeOperations.remove(nodeName)}
+                                    vbsSeparateDeploy={vbsSeparateDeploy}
                                 />
                             ))}
                             <Form.Item style={{ marginBottom: 0 }}>
@@ -627,7 +973,7 @@ const EnvironmentCreateForm = () => {
         );
     };
 
-    const StorageDiskInfo = ({ name, restField, hasStorageNode }) => {
+    const StorageDiskInfo = ({ name, restField, hasStorageNode, enableMetadata, enableReplication }) => {
         if (!hasStorageNode) return null;
 
         return (
@@ -641,15 +987,18 @@ const EnvironmentCreateForm = () => {
                                     diskName={diskName}
                                     diskRestField={diskRestField}
                                     onRemove={() => diskOperations.remove(diskName)}
+                                    enableMetadata={enableMetadata}
+                                    enableReplication={enableReplication}
                                 />
                             ))}
                             <Form.Item style={{ marginBottom: 0 }}>
                                 <Button
                                     type="dashed"
                                     onClick={() => diskOperations.add({
-                                        diskType: undefined,
-                                        diskSize: undefined,
-                                        diskCount: undefined
+                                        diskType: 'ssd',
+                                        diskSize: enableMetadata || enableReplication ? 200 : 80,
+                                        diskCount: enableMetadata && enableReplication ? 6 :
+                                            (enableMetadata || enableReplication ? 5 : 4)
                                     })}
                                     icon={<PlusOutlined />}
                                     block
@@ -721,6 +1070,9 @@ const EnvironmentCreateForm = () => {
 
     const ClusterCard = ({ name, restField, form, nodeStats, onRemoveCluster }) => {
         const businessType = Form.useWatch(['clusterInfo', name, 'businessType'], form);
+        const vbsSeparateDeploy = Form.useWatch(['clusterInfo', name, 'vbsSeparateDeploy'], form);
+        const enableMetadata = Form.useWatch(['clusterInfo', name, 'enableMetadata'], form);
+        const enableReplication = Form.useWatch(['clusterInfo', name, 'enableReplication'], form);
         const hasStorageNode = useCallback(() => {
             const nodeInfo = form.getFieldValue(['clusterInfo', name, 'nodeInfo']);
             return nodeInfo?.some(node => node?.nodeType === 'storage');
@@ -740,23 +1092,27 @@ const EnvironmentCreateForm = () => {
                     onRemove={onRemoveCluster}
                 />
 
-                <ClusterBasicInfo name={name} restField={restField} />
+                <ClusterBasicInfo name={name} restField={restField} businessType={businessType} />
                 <ClusterImageConfig
                     name={name}
                     restField={restField}
                     businessType={businessType}
                     hasStorageNode={hasStorageNode()}
+                    showClientImage={showClientImage}
                 />
                 <NodeInfoSection
                     name={name}
                     restField={restField}
                     businessType={businessType}
                     form={form}
+                    vbsSeparateDeploy={vbsSeparateDeploy}
                 />
                 <StorageDiskInfo
                     name={name}
                     restField={restField}
                     hasStorageNode={hasStorageNode()}
+                    enableMetadata={enableMetadata}
+                    enableReplication={enableReplication}
                 />
                 <StorageNetworkInfo
                     name={name}
@@ -919,7 +1275,10 @@ const EnvironmentCreateForm = () => {
                                                 platform: undefined,
                                                 storageImage: undefined,
                                                 clientImage: undefined,
-                                                nodeInfo: [{ nodeType: undefined }]
+                                                nodeInfo: [{ nodeType: undefined }],
+                                                vbsSeparateDeploy: false,
+                                                enableMetadata: false,
+                                                enableReplication: false
                                             });
                                             setNodeStats([...nodeStats, { storageCount: 0, clientCount: 0 }]);
                                         }}
