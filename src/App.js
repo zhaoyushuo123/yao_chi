@@ -1,8 +1,31 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Form, Input, Button, Select, Row, Col, message, Space, InputNumber, Checkbox, Card, Upload, Modal, Tooltip, Radio } from 'antd';
 import { PlusOutlined, MinusCircleOutlined, UploadOutlined, StarOutlined, StarFilled, DownloadOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 
 const { Option } = Select;
+
+// 自定义防抖Hook
+const useDebounce = (callback, delay) => {
+    const timeoutRef = useRef(null);
+
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, []);
+
+    return (...args) => {
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+        }
+
+        timeoutRef.current = setTimeout(() => {
+            callback(...args);
+        }, delay);
+    };
+};
 
 const EnvironmentCreateForm = () => {
     const [form] = Form.useForm();
@@ -42,13 +65,12 @@ const EnvironmentCreateForm = () => {
         }
 
         return () => {
-            // 组件卸载时清除定时器
             clearTimeout(inputTimerRef.current);
         };
     }, [form]);
 
     // 计算节点统计信息
-    const calculateNodeStats = (allValues) => {
+    const calculateNodeStats = useCallback((allValues) => {
         if (!allValues.clusterInfo) return [];
 
         return allValues.clusterInfo.map(cluster => {
@@ -63,33 +85,21 @@ const EnvironmentCreateForm = () => {
 
             return { storageCount, clientCount };
         });
-    };
+    }, []);
 
-    const onFinish = (values) => {
-        console.log('Received values of form: ', values);
-        message.success('环境创建成功！');
-    };
-
-    const onFinishFailed = (errorInfo) => {
-        console.log('Failed:', errorInfo);
-        message.error('请检查表单填写是否正确！');
-    };
-
-    const handleClusterChange = (changedValues, allValues) => {
+    // 使用自定义防抖Hook处理集群变化
+    const handleClusterChange = useCallback((changedValues, allValues) => {
         const count = allValues.clusterInfo?.length || 0;
         setClusterCount(count);
 
-        // 优化输入框性能，避免频繁计算
         const newStats = calculateNodeStats(allValues);
         setNodeStats(newStats);
 
-        // 检查是否需要显示客户端镜像
         const hasClientNodes = allValues.clusterInfo?.some(cluster =>
             cluster.nodeInfo?.some(node => node?.nodeType === 'client')
         );
         setShowClientImage(hasClientNodes);
 
-        // 处理业务类型变化的情况
         if (changedValues.clusterInfo) {
             allValues.clusterInfo.forEach((cluster, clusterIndex) => {
                 const currentBusinessType = changedValues.clusterInfo[clusterIndex]?.businessType;
@@ -128,7 +138,6 @@ const EnvironmentCreateForm = () => {
                                 );
                             },
                             onCancel: () => {
-                                // 取消则恢复原来的业务类型
                                 form.setFieldsValue({
                                     clusterInfo: {
                                         [clusterIndex]: {
@@ -138,64 +147,41 @@ const EnvironmentCreateForm = () => {
                                 });
                             }
                         });
-                    } else {
-                        // 没有需要移除的节点，直接更新业务类型
-                        form.setFieldsValue({
-                            clusterInfo: {
-                                [clusterIndex]: {
-                                    businessType: currentBusinessType
-                                }
-                            }
-                        });
-                    }
-                }
-
-                // 确保切换业务类型时节点信息同步更新
-                const businessType = form.getFieldValue(['clusterInfo', clusterIndex, 'businessType']);
-                const nodeInfo = form.getFieldValue(['clusterInfo', clusterIndex, 'nodeInfo']) || [];
-
-                if (businessType === 'dme') {
-                    const updatedNodeInfo = nodeInfo.filter(node => node?.nodeType !== 'storage');
-                    if (updatedNodeInfo.length !== nodeInfo.length) {
-                        form.setFieldsValue({
-                            clusterInfo: {
-                                [clusterIndex]: {
-                                    nodeInfo: updatedNodeInfo
-                                }
-                            }
-                        });
-                    }
-                } else if (businessType === 'block') {
-                    const updatedNodeInfo = nodeInfo.filter(node => node?.nodeType !== 'client');
-                    if (updatedNodeInfo.length !== nodeInfo.length) {
-                        form.setFieldsValue({
-                            clusterInfo: {
-                                [clusterIndex]: {
-                                    nodeInfo: updatedNodeInfo
-                                }
-                            }
-                        });
                     }
                 }
             });
         }
+    }, [calculateNodeStats, form]);
+
+    const debouncedHandleClusterChange = useDebounce(handleClusterChange, 300);
+
+    const onFinish = (values) => {
+        console.log('Received values of form: ', values);
+        message.success('环境创建成功！');
     };
 
-    const getNodeTypeOptions = (businessType) => {
+    const onFinishFailed = (errorInfo) => {
+        console.log('Failed:', errorInfo);
+        message.error('请检查表单填写是否正确！');
+    };
+
+    // 获取节点类型选项
+    const getNodeTypeOptions = useCallback((businessType) => {
         switch(businessType) {
             case 'block':
                 return [<Option key="storage" value="storage">存储</Option>];
             case 'dme':
                 return [<Option key="client" value="client">客户端</Option>];
-            default: // NAS或其他
+            default:
                 return [
                     <Option key="storage" value="storage">存储</Option>,
                     <Option key="client" value="client">客户端</Option>
                 ];
         }
-    };
+    }, []);
 
-    const getStorageImageOptions = (businessType) => {
+    // 获取存储镜像选项
+    const getStorageImageOptions = useCallback((businessType) => {
         if (businessType === 'dme') {
             return [<Option key="euler12" value="euler12">Euler 12</Option>];
         }
@@ -203,9 +189,10 @@ const EnvironmentCreateForm = () => {
             <Option key="euler8" value="euler8">Euler 8</Option>,
             <Option key="euler9" value="euler9">Euler 9</Option>
         ];
-    };
+    }, []);
 
-    const getClientImageOptions = (businessType) => {
+    // 获取客户端镜像选项
+    const getClientImageOptions = useCallback((businessType) => {
         if (businessType === 'dme') {
             return [<Option key="euler12" value="euler12">Euler 12</Option>];
         }
@@ -213,9 +200,10 @@ const EnvironmentCreateForm = () => {
             <Option key="ubuntu" value="ubuntu">Ubuntu</Option>,
             <Option key="centos77" value="centos77">CentOS 7.7</Option>
         ];
-    };
+    }, []);
 
-    const getNodeRoleOptions = (businessType, vbsSeparateDeploy) => {
+    // 获取节点角色选项
+    const getNodeRoleOptions = useCallback((businessType, vbsSeparateDeploy) => {
         const options = [];
 
         if (businessType === 'block') {
@@ -232,9 +220,10 @@ const EnvironmentCreateForm = () => {
         }
 
         return options;
-    };
+    }, []);
 
-    const applyTemplate = (template, config) => {
+    // 应用模板配置
+    const applyTemplate = useCallback((template, config) => {
         if (config) {
             form.setFieldsValue(config.configData);
             setNodeStats(calculateNodeStats(config.configData));
@@ -409,6 +398,8 @@ const EnvironmentCreateForm = () => {
                         }
                     }));
                     break;
+                default:
+                    break;
             }
 
             form.setFieldsValue(values);
@@ -416,9 +407,10 @@ const EnvironmentCreateForm = () => {
             message.success(`已应用${template}配置模板`);
             setActiveTemplate(template);
         }
-    };
+    }, [calculateNodeStats, form]);
 
-    const exportConfig = () => {
+    // 导出配置
+    const exportConfig = useCallback(() => {
         const values = form.getFieldsValue();
         const blob = new Blob([JSON.stringify(values, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -429,9 +421,10 @@ const EnvironmentCreateForm = () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    };
+    }, [form]);
 
-    const importConfig = (file) => {
+    // 导入配置
+    const importConfig = useCallback((file) => {
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
@@ -445,13 +438,14 @@ const EnvironmentCreateForm = () => {
         };
         reader.readAsText(file);
         return false;
-    };
+    }, [calculateNodeStats, form]);
 
-    const saveAsFavorite = () => {
+    // 保存为收藏配置
+    const saveAsFavorite = useCallback(() => {
         setIsFavoriteModalVisible(true);
-    };
+    }, []);
 
-    const handleFavoriteOk = () => {
+    const handleFavoriteOk = useCallback(() => {
         if (!favoriteName.trim()) {
             message.warning('请输入配置名称!');
             return;
@@ -471,27 +465,29 @@ const EnvironmentCreateForm = () => {
         message.success('配置已收藏');
         setFavoriteName('');
         setIsFavoriteModalVisible(false);
-    };
+    }, [favoriteConfigs, favoriteName, form]);
 
-    const handleFavoriteCancel = () => {
+    const handleFavoriteCancel = useCallback(() => {
         setIsFavoriteModalVisible(false);
         setFavoriteName('');
-    };
+    }, []);
 
-    const removeFavorite = (index) => {
+    // 移除收藏配置
+    const removeFavorite = useCallback((index) => {
         const updatedFavorites = [...favoriteConfigs];
         updatedFavorites.splice(index, 1);
         setFavoriteConfigs(updatedFavorites);
         localStorage.setItem('favoriteConfigs', JSON.stringify(updatedFavorites));
         message.success('配置已移除收藏');
-    };
+    }, [favoriteConfigs]);
 
-    const toggleFavorite = (index) => {
+    // 切换收藏状态
+    const toggleFavorite = useCallback((index) => {
         const updatedFavorites = [...favoriteConfigs];
         updatedFavorites[index].isFavorite = !updatedFavorites[index].isFavorite;
         setFavoriteConfigs(updatedFavorites);
         localStorage.setItem('favoriteConfigs', JSON.stringify(updatedFavorites));
-    };
+    }, [favoriteConfigs]);
 
     const templateButtons = [
         '3NODE_1Client', '3NODE_3Client', '3NODE_1DPC', '3NODE_3DPC',
@@ -500,7 +496,8 @@ const EnvironmentCreateForm = () => {
         '2DC', '3DC', '2GFS', '3GFS', 'BLOCK_Template', 'DME_Template', '6NODE_VBS_Sperate'
     ];
 
-    const ClusterHeader = ({ clusterIndex, stats, onRemove }) => (
+    // 优化后的集群头部组件
+    const ClusterHeader = React.memo(({ clusterIndex, stats, onRemove }) => (
         <div style={{
             position: 'absolute',
             top: 12,
@@ -508,29 +505,31 @@ const EnvironmentCreateForm = () => {
             background: '#f0f0f0',
             padding: '2px 8px',
             borderRadius: 4,
-            fontSize: 12
+            fontSize: 12,
+            display: 'flex',
+            alignItems: 'center'
         }}>
             <span style={{ marginRight: 8 }}>集群 #{clusterIndex}</span>
             <span style={{ marginRight: 8 }}>存储: {stats.storageCount}</span>
-            <span>客户端: {stats.clientCount}</span>
+            <span style={{ marginRight: 8 }}>客户端: {stats.clientCount}</span>
             {onRemove && (
-                <MinusCircleOutlined
-                    style={{
-                        fontSize: 14,
-                        color: '#ff4d4f',
-                        marginLeft: 8,
-                        cursor: 'pointer'
-                    }}
+                <Button
+                    type="text"
+                    danger
+                    icon={<MinusCircleOutlined />}
                     onClick={(e) => {
                         e.stopPropagation();
                         onRemove();
                     }}
+                    size="small"
+                    style={{ padding: '0 4px', height: 'auto' }}
                 />
             )}
         </div>
-    );
+    ));
 
-    const StorageNodeConfig = ({ nodeName, nodeRestField, businessType, vbsSeparateDeploy, form, clusterName }) => {
+    // 存储节点配置组件
+    const StorageNodeConfig = React.memo(({ nodeName, nodeRestField, businessType, vbsSeparateDeploy, form, clusterName }) => {
         const validateVBSNodes = useCallback(() => {
             if (!vbsSeparateDeploy) return;
 
@@ -595,9 +594,10 @@ const EnvironmentCreateForm = () => {
                 </Col>
             </Row>
         );
-    };
+    });
 
-    const ClientNodeConfig = ({ nodeName, nodeRestField }) => (
+    // 客户端节点配置组件
+    const ClientNodeConfig = React.memo(({ nodeName, nodeRestField }) => (
         <>
             <Row gutter={16}>
                 <Col span={12}>
@@ -629,12 +629,13 @@ const EnvironmentCreateForm = () => {
                 </Col>
             </Row>
         </>
-    );
+    ));
 
-    const NodeItem = ({ nodeName, nodeRestField, nodeTypeOptions, businessType, form, clusterName, onRemove, vbsSeparateDeploy }) => {
+    // 节点项组件
+    const NodeItem = React.memo(({ nodeName, nodeRestField, nodeTypeOptions, businessType, form, clusterName, onRemove, vbsSeparateDeploy }) => {
         const nodeType = Form.useWatch(['clusterInfo', clusterName, 'nodeInfo', nodeName, 'nodeType'], form);
 
-        const resetNodeFields = () => {
+        const resetNodeFields = useCallback(() => {
             form.setFieldsValue({
                 clusterInfo: {
                     [clusterName]: {
@@ -648,7 +649,7 @@ const EnvironmentCreateForm = () => {
                     }
                 }
             });
-        };
+        }, [clusterName, form, nodeName]);
 
         return (
             <div style={{ marginBottom: 8, padding: 8, background: '#f5f5f5', borderRadius: 4 }}>
@@ -668,12 +669,15 @@ const EnvironmentCreateForm = () => {
                                 {nodeTypeOptions}
                             </Select>
                         </Form.Item>
-                        <MinusCircleOutlined
-                            style={{ fontSize: 14, color: '#ff4d4f', cursor: 'pointer' }}
+                        <Button
+                            type="text"
+                            danger
+                            icon={<MinusCircleOutlined />}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 onRemove();
                             }}
+                            size="small"
                         />
                     </Space>
 
@@ -691,19 +695,20 @@ const EnvironmentCreateForm = () => {
                 </Space>
             </div>
         );
-    };
+    });
 
-    const DiskItem = ({ diskName, diskRestField, onRemove, enableMetadata, enableReplication }) => {
-        const getDefaultDiskSize = () => {
+    // 硬盘项组件
+    const DiskItem = React.memo(({ diskName, diskRestField, onRemove, enableMetadata, enableReplication }) => {
+        const getDefaultDiskSize = useCallback(() => {
             if (enableMetadata || enableReplication) return 200;
             return 80;
-        };
+        }, [enableMetadata, enableReplication]);
 
-        const getDefaultDiskCount = () => {
+        const getDefaultDiskCount = useCallback(() => {
             if (enableMetadata && enableReplication) return 6;
             if (enableMetadata || enableReplication) return 5;
             return 4;
-        };
+        }, [enableMetadata, enableReplication]);
 
         return (
             <div style={{ marginBottom: 8, padding: 8, background: '#f0f0f0', borderRadius: 4 }}>
@@ -740,29 +745,50 @@ const EnvironmentCreateForm = () => {
                             label="硬盘数量"
                             name={[diskName, 'diskCount']}
                             initialValue={getDefaultDiskCount()}
-                            rules={[{ required: true, message: '请输入硬盘数量!', type: 'number', min: 1, max: 100 }]}
+                            rules={[
+                                { required: true, message: '请输入硬盘数量!', type: 'number', min: 1, max: 100 },
+                                ({ getFieldValue }) => ({
+                                    validator(_, value) {
+                                        const minDisks = enableMetadata && enableReplication ? 6 :
+                                            enableMetadata || enableReplication ? 5 : 4;
+                                        if (value < minDisks) {
+                                            return Promise.reject(new Error(
+                                                enableMetadata && enableReplication ? '至少需要6块硬盘' :
+                                                    enableMetadata ? '元数据服务至少需要5块硬盘' :
+                                                        '复制集群服务至少需要5块硬盘'
+                                            ));
+                                        }
+                                        return Promise.resolve();
+                                    },
+                                }),
+                            ]}
                         >
                             <InputNumber placeholder="输入数量" style={{ width: '100%' }} min={1} max={100} />
                         </Form.Item>
                     </Col>
                     <Col span={1}>
-                        <MinusCircleOutlined
-                            style={{ marginTop: 24, fontSize: 14, color: '#ff4d4f', cursor: 'pointer' }}
+                        <Button
+                            type="text"
+                            danger
+                            icon={<MinusCircleOutlined />}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 onRemove();
                             }}
+                            size="small"
+                            style={{ padding: '0 4px', height: 'auto', marginTop: 24 }}
                         />
                     </Col>
                 </Row>
             </div>
         );
-    };
+    });
 
-    const ClusterBasicInfo = ({ name, restField, businessType }) => {
+    // 集群基本信息组件
+    const ClusterBasicInfo = React.memo(({ name, restField, businessType }) => {
         const [vbsSeparateDeploy, setVbsSeparateDeploy] = useState(false);
 
-        const handleVbsSeparateChange = (e) => {
+        const handleVbsSeparateChange = useCallback((e) => {
             const value = e.target.value;
             setVbsSeparateDeploy(value);
             form.setFieldsValue({
@@ -783,7 +809,7 @@ const EnvironmentCreateForm = () => {
                     message.warning('VBS分离部署需要至少6个VBS节点');
                 }
             }
-        };
+        }, [form, name]);
 
         return (
             <>
@@ -876,9 +902,10 @@ const EnvironmentCreateForm = () => {
                 </Row>
             </>
         );
-    };
+    });
 
-    const ClusterImageConfig = ({ name, restField, businessType, hasStorageNode, showClientImage }) => (
+    // 集群镜像配置组件
+    const ClusterImageConfig = React.memo(({ name, restField, businessType, hasStorageNode, showClientImage }) => (
         <Row gutter={16} style={{ marginBottom: 8 }}>
             {hasStorageNode && (
                 <Col span={12}>
@@ -911,10 +938,11 @@ const EnvironmentCreateForm = () => {
                 </Col>
             )}
         </Row>
-    );
+    ));
 
-    const NodeInfoSection = ({ name, restField, businessType, form, vbsSeparateDeploy }) => {
-        const nodeTypeOptions = getNodeTypeOptions(businessType);
+    // 节点信息部分组件
+    const NodeInfoSection = React.memo(({ name, restField, businessType, form, vbsSeparateDeploy }) => {
+        const nodeTypeOptions = useMemo(() => getNodeTypeOptions(businessType), [businessType]);
 
         return (
             <Form.Item label="节点信息" style={{ marginBottom: 8 }}>
@@ -951,9 +979,10 @@ const EnvironmentCreateForm = () => {
                 </Form.List>
             </Form.Item>
         );
-    };
+    });
 
-    const StorageDiskInfo = ({ name, restField, hasStorageNode, enableMetadata, enableReplication }) => {
+    // 存储硬盘信息组件
+    const StorageDiskInfo = React.memo(({ name, restField, hasStorageNode, enableMetadata, enableReplication }) => {
         if (!hasStorageNode) return null;
 
         return (
@@ -991,9 +1020,10 @@ const EnvironmentCreateForm = () => {
                 </Form.List>
             </Form.Item>
         );
-    };
+    });
 
-    const StorageNetworkInfo = ({ name, restField, hasStorageNode }) => {
+    // 存储网络信息组件
+    const StorageNetworkInfo = React.memo(({ name, restField, hasStorageNode }) => {
         if (!hasStorageNode) return null;
 
         return (
@@ -1046,25 +1076,29 @@ const EnvironmentCreateForm = () => {
                 </Row>
             </Form.Item>
         );
-    };
+    });
 
-    const ClusterCard = ({ name, restField, form, nodeStats, onRemoveCluster, hideClusterName }) => {
+    // 集群卡片组件
+    const ClusterCard = React.memo(({ name, restField, form, nodeStats, onRemoveCluster }) => {
         const businessType = Form.useWatch(['clusterInfo', name, 'businessType'], form);
         const vbsSeparateDeploy = Form.useWatch(['clusterInfo', name, 'vbsSeparateDeploy'], form);
         const enableMetadata = Form.useWatch(['clusterInfo', name, 'enableMetadata'], form);
         const enableReplication = Form.useWatch(['clusterInfo', name, 'enableReplication'], form);
-        const hasStorageNode = useCallback(() => {
+
+        const hasStorageNode = useMemo(() => {
             const nodeInfo = form.getFieldValue(['clusterInfo', name, 'nodeInfo']);
             return nodeInfo?.some(node => node?.nodeType === 'storage');
         }, [form, name]);
 
         return (
             <div style={{
-                marginBottom: 12,
+                marginBottom: 16,
                 border: '1px solid #d9d9d9',
-                padding: 12,
+                padding: 16,
                 borderRadius: 4,
-                position: 'relative'
+                position: 'relative',
+                backgroundColor: '#fff',
+                boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)'
             }}>
                 <ClusterHeader
                     clusterIndex={name + 1}
@@ -1072,24 +1106,12 @@ const EnvironmentCreateForm = () => {
                     onRemove={onRemoveCluster}
                 />
 
-                {!hideClusterName && (
-                    <Form.Item
-                        {...restField}
-                        label="集群名称"
-                        name={[name, 'clusterName']}
-                        rules={[{ required: true, message: '请输入集群名称!' }]}
-                        style={{ marginBottom: 8 }}
-                    >
-                        <Input placeholder="请输入集群名称" />
-                    </Form.Item>
-                )}
-
                 <ClusterBasicInfo name={name} restField={restField} businessType={businessType} />
                 <ClusterImageConfig
                     name={name}
                     restField={restField}
                     businessType={businessType}
-                    hasStorageNode={hasStorageNode()}
+                    hasStorageNode={hasStorageNode}
                     showClientImage={showClientImage}
                 />
                 <NodeInfoSection
@@ -1102,30 +1124,31 @@ const EnvironmentCreateForm = () => {
                 <StorageDiskInfo
                     name={name}
                     restField={restField}
-                    hasStorageNode={hasStorageNode()}
+                    hasStorageNode={hasStorageNode}
                     enableMetadata={enableMetadata}
                     enableReplication={enableReplication}
                 />
                 <StorageNetworkInfo
                     name={name}
                     restField={restField}
-                    hasStorageNode={hasStorageNode()}
+                    hasStorageNode={hasStorageNode}
                 />
             </div>
         );
-    };
+    });
 
-    const TemplatePanel = ({
-                               templateButtons,
-                               activeTemplate,
-                               applyTemplate,
-                               favoriteConfigs,
-                               saveAsFavorite,
-                               importConfig,
-                               exportConfig,
-                               toggleFavorite,
-                               removeFavorite
-                           }) => {
+    // 模板面板组件
+    const TemplatePanel = React.memo(({
+                                          templateButtons,
+                                          activeTemplate,
+                                          applyTemplate,
+                                          favoriteConfigs,
+                                          saveAsFavorite,
+                                          importConfig,
+                                          exportConfig,
+                                          toggleFavorite,
+                                          removeFavorite
+                                      }) => {
         return (
             <>
                 <Card title="典型配置" style={{ marginBottom: 12 }} bodyStyle={{ padding: 12 }}>
@@ -1229,10 +1252,10 @@ const EnvironmentCreateForm = () => {
                 </Card>
             </>
         );
-    };
+    });
 
     return (
-        <div style={{ display: 'flex', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 16, padding: 16, backgroundColor: '#bfe1e4' }}>
             <div style={{ flex: 3 }}>
                 <Form
                     form={form}
@@ -1241,11 +1264,10 @@ const EnvironmentCreateForm = () => {
                     onFinish={onFinish}
                     onFinishFailed={onFinishFailed}
                     autoComplete="off"
-                    onValuesChange={handleClusterChange}
+                    onValuesChange={debouncedHandleClusterChange}
                 >
-                    <h2 style={{ marginBottom: 12 }}>创建新环境</h2>
+                    <h2 style={{ marginBottom: 16 }}>创建新环境</h2>
 
-                    {/* 集群信息部分 */}
                     <Form.List name="clusterInfo">
                         {(fields, { add, remove }) => (
                             <>
@@ -1260,7 +1282,6 @@ const EnvironmentCreateForm = () => {
                                             remove(name);
                                             setClusterCount(clusterCount - 1);
                                         }}
-                                        hideClusterName={true}
                                     />
                                 ))}
                                 <Form.Item style={{ marginBottom: 0 }}>
@@ -1282,6 +1303,7 @@ const EnvironmentCreateForm = () => {
                                         }}
                                         block
                                         icon={<PlusOutlined />}
+                                        style={{ marginTop: 8 }}
                                     >
                                         添加集群信息
                                     </Button>
@@ -1290,18 +1312,28 @@ const EnvironmentCreateForm = () => {
                         )}
                     </Form.List>
 
-                    <Card title="环境名称" style={{ marginBottom: 12 }}>
-                        {Array.from({ length: clusterCount }).map((_, index) => (
-                            <Form.Item
-                                key={index}
-                                label={`集群${index + 1}名称`}
-                                name={['clusterInfo', index, 'clusterName']}
-                                rules={[{ required: true, message: `请输入集群${index + 1}名称!` }]}
-                                style={{ marginBottom: 8 }}
-                            >
-                                <Input placeholder={`请输入集群${index + 1}名称`} />
-                            </Form.Item>
-                        ))}
+                    <Card
+                        title="环境名称"
+                        style={{ marginTop: 16 }}
+                        bodyStyle={{ padding: 16 }}
+                    >
+                        <Form.List name="clusterInfo">
+                            {(fields) => (
+                                <>
+                                    {fields.map(({ key, name }) => (
+                                        <Form.Item
+                                            key={key}
+                                            label={`集群${name + 1}名称`}
+                                            name={[name, 'clusterName']}
+                                            rules={[{ required: true, message: `请输入集群${name + 1}名称!` }]}
+                                            style={{ marginBottom: 16 }}
+                                        >
+                                            <Input placeholder={`请输入集群${name + 1}名称`} />
+                                        </Form.Item>
+                                    ))}
+                                </>
+                            )}
+                        </Form.List>
 
                         {clusterCount >= 2 && (
                             <Form.Item
@@ -1315,12 +1347,12 @@ const EnvironmentCreateForm = () => {
                         )}
                     </Card>
 
-                    <Form.Item style={{ marginBottom: 0 }}>
+                    <Form.Item style={{ marginTop: 16 }}>
                         <Space>
-                            <Button type="primary" htmlType="submit">
+                            <Button type="primary" htmlType="submit" size="large">
                                 提交
                             </Button>
-                            <Button htmlType="button" onClick={() => form.resetFields()}>
+                            <Button htmlType="button" onClick={() => form.resetFields()} size="large">
                                 重置
                             </Button>
                         </Space>
@@ -1342,7 +1374,6 @@ const EnvironmentCreateForm = () => {
                 />
             </div>
 
-            {/* 收藏配置的Modal */}
             <Modal
                 title="收藏当前配置"
                 open={isFavoriteModalVisible}
