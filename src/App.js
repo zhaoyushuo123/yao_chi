@@ -40,7 +40,8 @@ const EnvironmentCreateForm = () => {
     const inputTimerRef = useRef(null);
 
     // 模板描述信息
-    const templateDescriptions = {
+    let templateDescriptions;
+    templateDescriptions = {
         '3NODE_1Client': '3节点存储集群配置，包含2个FSM节点和1个FSA节点，以及1个客户端节点，适合基础NAS场景',
         'BLOCK_Template': '块存储集群配置，包含3个FSM节点，适合块存储业务场景',
         'DME_Template': 'DME集群配置，包含2个客户端节点，适合数据管理引擎场景',
@@ -729,6 +730,7 @@ const EnvironmentCreateForm = () => {
     });
 
     // 硬盘项组件
+    // 硬盘项组件
     const DiskItem = React.memo(({ diskName, diskRestField, onRemove, enableMetadata, enableReplication }) => {
         const getDefaultDiskSize = useCallback(() => {
             if (enableMetadata || enableReplication) return 200;
@@ -740,6 +742,22 @@ const EnvironmentCreateForm = () => {
             if (enableMetadata || enableReplication) return 5;
             return 4;
         }, [enableMetadata, enableReplication]);
+
+        const minDisks = useMemo(() => {
+            return enableMetadata && enableReplication ? 6 :
+                enableMetadata || enableReplication ? 5 : 4;
+        }, [enableMetadata, enableReplication]);
+
+        const diskCountValidator = useCallback((_, value) => {
+            if (value < minDisks) {
+                return Promise.reject(new Error(
+                    enableMetadata && enableReplication ? '至少需要6块硬盘' :
+                        enableMetadata ? '元数据服务至少需要5块硬盘' :
+                            '复制集群服务至少需要5块硬盘'
+                ));
+            }
+            return Promise.resolve();
+        }, [minDisks, enableMetadata, enableReplication]);
 
         return (
             <div style={{ marginBottom: 8, padding: 8, background: '#f0f0f0', borderRadius: 4 }}>
@@ -778,20 +796,7 @@ const EnvironmentCreateForm = () => {
                             initialValue={getDefaultDiskCount()}
                             rules={[
                                 { required: true, message: '请输入硬盘数量!', type: 'number', min: 1, max: 100 },
-                                ({ getFieldValue }) => ({
-                                    validator(_, value) {
-                                        const minDisks = enableMetadata && enableReplication ? 6 :
-                                            enableMetadata || enableReplication ? 5 : 4;
-                                        if (value < minDisks) {
-                                            return Promise.reject(new Error(
-                                                enableMetadata && enableReplication ? '至少需要6块硬盘' :
-                                                    enableMetadata ? '元数据服务至少需要5块硬盘' :
-                                                        '复制集群服务至少需要5块硬盘'
-                                            ));
-                                        }
-                                        return Promise.resolve();
-                                    },
-                                }),
+                                { validator: diskCountValidator }
                             ]}
                         >
                             <InputNumber placeholder="输入数量" style={{ width: '100%' }} min={1} max={100} />
@@ -814,10 +819,12 @@ const EnvironmentCreateForm = () => {
             </div>
         );
     });
-
     // 集群基本信息组件
     const ClusterBasicInfo = React.memo(({ name, restField, businessType }) => {
         const [vbsSeparateDeploy, setVbsSeparateDeploy] = useState(false);
+        const [enableMetadata, setEnableMetadata] = useState(false);
+        const [enableReplication, setEnableReplication] = useState(false);
+        const [enableTiering, setEnableTiering] = useState(false);
 
         const handleVbsSeparateChange = useCallback((e) => {
             const value = e.target.value;
@@ -842,81 +849,22 @@ const EnvironmentCreateForm = () => {
             }
         }, [form, name]);
 
+        const handleMetadataChange = useCallback((e) => {
+            setEnableMetadata(e.target.checked);
+        }, []);
+
+        const handleReplicationChange = useCallback((e) => {
+            setEnableReplication(e.target.checked);
+        }, []);
+
+        const handleTieringChange = useCallback((e) => {
+            setEnableTiering(e.target.checked);
+        }, []);
+
         return (
             <>
                 <Row gutter={16} style={{ marginBottom: 8 }}>
-                    {businessType === 'block' && (
-                        <Col span={12}>
-                            <Form.Item
-                                {...restField}
-                                name={[name, 'vbsSeparateDeploy']}
-                                style={{ marginBottom: 8 }}
-                            >
-                                <Radio.Group onChange={handleVbsSeparateChange} value={vbsSeparateDeploy}>
-                                    <Radio value={true}>
-                                        VBS分离部署
-                                        <Tooltip title="VBS分离部署需要至少6个VBS节点">
-                                            <QuestionCircleOutlined style={{ marginLeft: 4 }} />
-                                        </Tooltip>
-                                    </Radio>
-                                    <Radio value={false}>普通部署</Radio>
-                                </Radio.Group>
-                            </Form.Item>
-                        </Col>
-                    )}
-                    {businessType === 'nas' && (
-                        <>
-                            <Col span={6}>
-                                <Form.Item
-                                    {...restField}
-                                    name={[name, 'enableMetadata']}
-                                    style={{ marginBottom: 8 }}
-                                    valuePropName="checked"
-                                >
-                                    <Checkbox>
-                                        开启元数据服务
-                                        <Tooltip title="开启元数据服务需要更大的存储容量">
-                                            <QuestionCircleOutlined style={{ marginLeft: 4 }} />
-                                        </Tooltip>
-                                    </Checkbox>
-                                </Form.Item>
-                            </Col>
-                            <Col span={6}>
-                                <Form.Item
-                                    {...restField}
-                                    name={[name, 'enableReplication']}
-                                    style={{ marginBottom: 8 }}
-                                    valuePropName="checked"
-                                >
-                                    <Checkbox>
-                                        开启复制集群服务
-                                        <Tooltip title="开启复制集群服务需要更大的存储容量">
-                                            <QuestionCircleOutlined style={{ marginLeft: 4 }} />
-                                        </Tooltip>
-                                    </Checkbox>
-                                </Form.Item>
-                            </Col>
-                            <Col span={6}>
-                                <Form.Item
-                                    {...restField}
-                                    name={[name, 'enableTiering']}
-                                    style={{ marginBottom: 8 }}
-                                    valuePropName="checked"
-                                >
-                                    <Checkbox>
-                                        开启分级服务
-                                        <Tooltip title="开启分级服务需要额外的存储空间">
-                                            <QuestionCircleOutlined style={{ marginLeft: 4 }} />
-                                        </Tooltip>
-                                    </Checkbox>
-                                </Form.Item>
-                            </Col>
-                        </>
-                    )}
-                </Row>
-
-                <Row gutter={16} style={{ marginBottom: 8 }}>
-                    <Col span={12}>
+                    <Col span={8}>
                         <Form.Item
                             {...restField}
                             label="业务大类"
@@ -931,7 +879,7 @@ const EnvironmentCreateForm = () => {
                             </Select>
                         </Form.Item>
                     </Col>
-                    <Col span={12}>
+                    <Col span={8}>
                         <Form.Item
                             {...restField}
                             label="平台"
@@ -961,6 +909,73 @@ const EnvironmentCreateForm = () => {
                             </Select>
                         </Form.Item>
                     </Col>
+                </Row>
+
+                <Row gutter={16} style={{ marginBottom: 8 }}>
+                    {businessType === 'block' && (
+                        <Col span={24}>
+                            <Form.Item
+                                {...restField}
+                                name={[name, 'vbsSeparateDeploy']}
+                                style={{ marginBottom: 8 }}
+                            >
+                                <Radio.Group onChange={handleVbsSeparateChange} value={vbsSeparateDeploy}>
+                                    <Radio value={true}>
+                                        VBS分离部署
+                                        <Tooltip title="VBS分离部署需要至少6个VBS节点">
+                                            <QuestionCircleOutlined style={{ marginLeft: 4 }} />
+                                        </Tooltip>
+                                    </Radio>
+                                    <Radio value={false}>普通部署</Radio>
+                                </Radio.Group>
+                            </Form.Item>
+                        </Col>
+                    )}
+                    {businessType === 'nas' && (
+                        <Col span={24}>
+                            <Space size="middle">
+                                <Form.Item
+                                    {...restField}
+                                    name={[name, 'enableMetadata']}
+                                    style={{ marginBottom: 8 }}
+                                    valuePropName="checked"
+                                >
+                                    <Checkbox onChange={handleMetadataChange}>
+                                        开启元数据服务
+                                        <Tooltip title="开启元数据服务需要更大的存储容量">
+                                            <QuestionCircleOutlined style={{ marginLeft: 4 }} />
+                                        </Tooltip>
+                                    </Checkbox>
+                                </Form.Item>
+                                <Form.Item
+                                    {...restField}
+                                    name={[name, 'enableReplication']}
+                                    style={{ marginBottom: 8 }}
+                                    valuePropName="checked"
+                                >
+                                    <Checkbox onChange={handleReplicationChange}>
+                                        开启复制集群服务
+                                        <Tooltip title="开启复制集群服务需要更大的存储容量">
+                                            <QuestionCircleOutlined style={{ marginLeft: 4 }} />
+                                        </Tooltip>
+                                    </Checkbox>
+                                </Form.Item>
+                                <Form.Item
+                                    {...restField}
+                                    name={[name, 'enableTiering']}
+                                    style={{ marginBottom: 8 }}
+                                    valuePropName="checked"
+                                >
+                                    <Checkbox onChange={handleTieringChange}>
+                                        开启分级服务
+                                        <Tooltip title="开启分级服务需要额外的存储空间">
+                                            <QuestionCircleOutlined style={{ marginLeft: 4 }} />
+                                        </Tooltip>
+                                    </Checkbox>
+                                </Form.Item>
+                            </Space>
+                        </Col>
+                    )}
                 </Row>
             </>
         );
