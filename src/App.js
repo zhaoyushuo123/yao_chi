@@ -104,6 +104,7 @@ const EnvironmentCreateForm = () => {
     }, []);
 
     // 使用自定义防抖Hook处理集群变化
+    // 修复后的handleClusterChange函数
     const handleClusterChange = useCallback((changedValues, allValues) => {
         const count = allValues.clusterInfo?.length || 0;
         setClusterCount(count);
@@ -117,58 +118,46 @@ const EnvironmentCreateForm = () => {
         setShowClientImage(hasClientNodes);
 
         if (changedValues.clusterInfo) {
-            allValues.clusterInfo.forEach((cluster, clusterIndex) => {
-                const currentBusinessType = changedValues.clusterInfo[clusterIndex]?.businessType;
+            Object.entries(changedValues.clusterInfo).forEach(([clusterIndexStr, clusterChanges]) => {
+                const clusterIndex = parseInt(clusterIndexStr);
+                const currentBusinessType = clusterChanges?.businessType;
+                if (!currentBusinessType) return;
+
                 const prevBusinessType = form.getFieldValue(['clusterInfo', clusterIndex, 'businessType']);
+                if (currentBusinessType === prevBusinessType) return;
 
-                if (currentBusinessType && currentBusinessType !== prevBusinessType) {
-                    const nodeInfo = form.getFieldValue(['clusterInfo', clusterIndex, 'nodeInfo']) || [];
-                    let nodesToRemove = [];
+                // 获取当前所有节点
+                const currentNodes = form.getFieldValue(['clusterInfo', clusterIndex, 'nodeInfo']) || [];
 
+                // 根据新业务类型过滤节点
+                let filteredNodes = currentNodes.filter(node => {
                     if (currentBusinessType === 'block') {
-                        nodesToRemove = nodeInfo.filter(node => node?.nodeType === 'client');
+                        return node?.nodeType !== 'client'; // 只保留存储节点
                     } else if (currentBusinessType === 'dme') {
-                        nodesToRemove = nodeInfo.filter(node => node?.nodeType === 'storage');
+                        return node?.nodeType !== 'storage'; // 只保留客户端节点
                     }
+                    return true; // 其他情况保留所有节点
+                });
 
-                    if (nodesToRemove.length > 0) {
-                        Modal.confirm({
-                            title: '确认切换业务类型?',
-                            content: `切换为${currentBusinessType.toUpperCase()}将移除${nodesToRemove.length}个不兼容的节点`,
-                            okText: '确认',
-                            cancelText: '取消',
-                            onOk: () => {
-                                const updatedNodeInfo = nodeInfo.filter(node =>
-                                    !nodesToRemove.includes(node)
-                                );
-                                form.setFieldsValue({
-                                    clusterInfo: {
-                                        [clusterIndex]: {
-                                            nodeInfo: updatedNodeInfo,
-                                            businessType: currentBusinessType
-                                        }
-                                    }
-                                });
-                                message.warning(
-                                    `已自动移除${nodesToRemove.length}个${currentBusinessType === 'block' ? '客户端' : '存储'}节点`
-                                );
-                            },
-                            onCancel: () => {
-                                form.setFieldsValue({
-                                    clusterInfo: {
-                                        [clusterIndex]: {
-                                            businessType: prevBusinessType
-                                        }
-                                    }
-                                });
+                // 如果节点列表有变化，更新表单
+                if (filteredNodes.length !== currentNodes.length) {
+                    form.setFieldsValue({
+                        clusterInfo: {
+                            [clusterIndex]: {
+                                nodeInfo: filteredNodes, // 直接替换为过滤后的节点数组
+                                businessType: currentBusinessType
                             }
-                        });
-                    }
+                        }
+                    });
+
+                    message.warning(
+                        `已自动移除${currentNodes.length - filteredNodes.length}个不兼容节点`
+                    );
                 }
             });
         }
     }, [calculateNodeStats, form]);
-
+    // 防抖函数保持不变
     const debouncedHandleClusterChange = useDebounce(handleClusterChange, 300);
 
     const onFinish = (values) => {
@@ -527,31 +516,51 @@ const EnvironmentCreateForm = () => {
     ];
 
     // 优化后的集群头部组件
+    // 优化后的集群头部组件
+    // 简化后的集群头部组件 - 直接删除无需确认
     const ClusterHeader = React.memo(({ clusterIndex, stats, onRemove }) => (
         <div style={{
             position: 'absolute',
             top: 12,
             right: 12,
-            background: '#f0f0f0',
-            padding: '2px 8px',
-            borderRadius: 4,
-            fontSize: 12,
             display: 'flex',
-            alignItems: 'center'
+            alignItems: 'center',
+            gap: 8,
+            zIndex: 1
         }}>
-            <span style={{ marginRight: 8 }}>集群 #{clusterIndex}</span>
-            <span style={{ marginRight: 8 }}>存储: {stats.storageCount}</span>
-            <span style={{ marginRight: 8 }}>客户端: {stats.clientCount}</span>
+            {/* 统计信息 */}
+            <div style={{
+                background: '#f0f0f0',
+                padding: '6px 12px',
+                borderRadius: 4,
+                fontSize: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+            }}>
+                <span>集群 #{clusterIndex}</span>
+                <span>|</span>
+                <span>存储: {stats.storageCount}</span>
+                <span>|</span>
+                <span>客户端: {stats.clientCount}</span>
+            </div>
+
+            {/* 删除按钮 - 直接删除无需确认 */}
             <Button
                 type="primary"
                 danger
                 icon={<MinusCircleOutlined />}
                 onClick={(e) => {
                     e.stopPropagation();
-                    onRemove();
+                    onRemove(); // 直接调用删除函数
                 }}
                 size="small"
-                style={{ padding: '0 4px', height: 'auto' }}
+                style={{
+                    padding: '6px 12px',
+                    height: 32,
+                    display: 'flex',
+                    alignItems: 'center'
+                }}
             >
                 删除集群
             </Button>
@@ -574,133 +583,131 @@ const EnvironmentCreateForm = () => {
         }, [vbsSeparateDeploy, form, clusterName]);
 
         return (
-            <Row gutter={16}>
-                <Col span={12}>
-                    <Form.Item
-                        {...nodeRestField}
-                        label="节点角色"
-                        name={[nodeName, 'nodeRole']}
-                        rules={[{ required: true, message: '请选择节点角色!' }]}
+            <Space style={{ marginLeft: 16, flex: 2 }}>
+                <Form.Item
+                    {...nodeRestField}
+                    label="节点角色"
+                    name={[nodeName, 'nodeRole']}
+                    rules={[{ required: true, message: '请选择节点角色!' }]}
+                    style={{ marginBottom: 0, width: 150 }}
+                >
+                    <Select
+                        placeholder="选择节点角色"
+                        onChange={validateVBSNodes}
                     >
-                        <Select
-                            placeholder="选择节点角色"
-                            onChange={validateVBSNodes}
-                        >
-                            {getNodeRoleOptions(businessType, vbsSeparateDeploy)}
-                        </Select>
-                    </Form.Item>
-                </Col>
-                <Col span={12}>
-                    <Form.Item
-                        {...nodeRestField}
-                        label="节点数量"
-                        name={[nodeName, 'nodeCount']}
-                        rules={[
-                            { required: true, message: '请输入节点数量!', type: 'number', min: 1, max: 100 },
-                            ({ getFieldValue }) => ({
-                                validator(_, value) {
-                                    if (!value || value < 1) {
-                                        return Promise.reject(new Error('请输入有效节点数量'));
-                                    }
-                                    const nodeRole = getFieldValue(['clusterInfo', clusterName, 'nodeInfo', nodeName, 'nodeRole']);
-                                    const vbsSeparate = getFieldValue(['clusterInfo', clusterName, 'vbsSeparateDeploy']);
+                        {getNodeRoleOptions(businessType, vbsSeparateDeploy)}
+                    </Select>
+                </Form.Item>
 
-                                    if (nodeRole === 'vbs' && vbsSeparate && value < 6) {
-                                        return Promise.reject(new Error('VBS分离部署需要至少6个节点'));
-                                    }
-                                    return Promise.resolve();
-                                },
-                            }),
-                        ]}
-                    >
-                        <InputNumber
-                            placeholder="输入节点数量"
-                            style={{ width: '100%' }}
-                            min={1}
-                            max={100}
-                            onChange={validateVBSNodes}
-                        />
-                    </Form.Item>
-                </Col>
-            </Row>
+                <Form.Item
+                    {...nodeRestField}
+                    label="节点数量"
+                    name={[nodeName, 'nodeCount']}
+                    rules={[
+                        { required: true, message: '请输入节点数量!', type: 'number', min: 1, max: 100 },
+                        ({ getFieldValue }) => ({
+                            validator(_, value) {
+                                if (!value || value < 1) {
+                                    return Promise.reject(new Error('请输入有效节点数量'));
+                                }
+                                const nodeRole = getFieldValue(['clusterInfo', clusterName, 'nodeInfo', nodeName, 'nodeRole']);
+                                const vbsSeparate = getFieldValue(['clusterInfo', clusterName, 'vbsSeparateDeploy']);
+
+                                if (nodeRole === 'vbs' && vbsSeparate && value < 6) {
+                                    return Promise.reject(new Error('VBS分离部署需要至少6个节点'));
+                                }
+                                return Promise.resolve();
+                            },
+                        }),
+                    ]}
+                    style={{ marginBottom: 0, width: 150 }}
+                >
+                    <InputNumber
+                        placeholder="数量"
+                        style={{ width: '100%' }}
+                        min={1}
+                        max={100}
+                        onChange={validateVBSNodes}
+                    />
+                </Form.Item>
+            </Space>
         );
     });
-
     // 客户端节点配置组件
     const ClientNodeConfig = React.memo(({ nodeName, nodeRestField }) => (
-        <>
-            <Row gutter={16}>
-                <Col span={12}>
-                    <Form.Item
-                        {...nodeRestField}
-                        label="业务服务"
-                        name={[nodeName, 'clientServices']}
-                        rules={[{ required: true, message: '请至少选择一项业务服务!', type: 'array', min: 1 }]}
-                    >
-                        <Checkbox.Group>
-                            <Row gutter={8}>
-                                <Col span={6}><Checkbox value="nfs">NFS</Checkbox></Col>
-                                <Col span={6}><Checkbox value="obs">OBS</Checkbox></Col>
-                                <Col span={6}><Checkbox value="dpc">DPC</Checkbox></Col>
-                                <Col span={6}><Checkbox value="fi">FI</Checkbox></Col>
-                            </Row>
-                        </Checkbox.Group>
-                    </Form.Item>
-                </Col>
-                <Col span={12}>
-                    <Form.Item
-                        {...nodeRestField}
-                        label="节点数量"
-                        name={[nodeName, 'nodeCount']}
-                        rules={[{ required: true, message: '请输入节点数量!', type: 'number', min: 1, max: 100 }]}
-                    >
-                        <InputNumber placeholder="输入节点数量" style={{ width: '100%' }} min={1} max={100} />
-                    </Form.Item>
-                </Col>
-            </Row>
-        </>
-    ));
+        <Space style={{ marginLeft: 16, flex: 2 }}>
+            <Form.Item
+                {...nodeRestField}
+                label="业务服务"
+                name={[nodeName, 'clientServices']}
+                rules={[{ required: true, message: '请至少选择一项业务服务!', type: 'array', min: 1 }]}
+                style={{ marginBottom: 0, width: 200 }}
+            >
+                <Checkbox.Group>
+                    <Row gutter={8}>
+                        <Col span={6}><Checkbox value="nfs">NFS</Checkbox></Col>
+                        <Col span={6}><Checkbox value="obs">OBS</Checkbox></Col>
+                        <Col span={6}><Checkbox value="dpc">DPC</Checkbox></Col>
+                        <Col span={6}><Checkbox value="fi">FI</Checkbox></Col>
+                    </Row>
+                </Checkbox.Group>
+            </Form.Item>
 
+            <Form.Item
+                {...nodeRestField}
+                label="节点数量"
+                name={[nodeName, 'nodeCount']}
+                rules={[{ required: true, message: '请输入节点数量!', type: 'number', min: 1, max: 100 }]}
+                style={{ marginBottom: 0, width: 100 }}
+            >
+                <InputNumber placeholder="数量" style={{ width: '100%' }} min={1} max={100} />
+            </Form.Item>
+        </Space>
+    ));
     // 节点项组件
     const NodeItem = React.memo(({ nodeName, nodeRestField, nodeTypeOptions, businessType, form, clusterName, onRemove, vbsSeparateDeploy }) => {
+        // 当业务类型变更时，不兼容的节点项会被自动移除，所以这里不需要额外处理
         const nodeType = Form.useWatch(['clusterInfo', clusterName, 'nodeInfo', nodeName, 'nodeType'], form);
-
-        const resetNodeFields = useCallback(() => {
-            form.setFieldsValue({
-                clusterInfo: {
-                    [clusterName]: {
-                        nodeInfo: {
-                            [nodeName]: {
-                                nodeRole: undefined,
-                                nodeCount: undefined,
-                                clientServices: []
-                            }
-                        }
-                    }
-                }
-            });
-        }, [clusterName, form, nodeName]);
 
         return (
             <div style={{ marginBottom: 8, padding: 8, background: '#f5f5f5', borderRadius: 4 }}>
                 <Space direction="vertical" style={{ width: '100%' }}>
-                    <Space align="baseline" style={{ marginBottom: 4 }}>
+                    <Space align="baseline" style={{ marginBottom: 4, display: 'flex', alignItems: 'flex-start' }}>
+                        {/* 节点大类选择器 */}
                         <Form.Item
                             {...nodeRestField}
                             name={[nodeName, 'nodeType']}
                             rules={[{ required: true, message: '请选择节点大类!' }]}
                             label="节点大类"
-                            labelCol={{ span: 24 }}
-                            style={{ marginBottom: 0 }}
+                            style={{ marginBottom: 0, flex: 1 }}
                         >
                             <Select
                                 placeholder="选择节点大类"
-                                style={{ width: 200 }}
-                                onChange={resetNodeFields}
+                                style={{ width: '100%' }}
                             >
                                 {nodeTypeOptions}
                             </Select>
                         </Form.Item>
+
+                        {/* 动态显示节点配置 */}
+                        {nodeType === 'storage' && (
+                            <StorageNodeConfig
+                                nodeName={nodeName}
+                                nodeRestField={nodeRestField}
+                                businessType={businessType}
+                                vbsSeparateDeploy={vbsSeparateDeploy}
+                                form={form}
+                                clusterName={clusterName}
+                            />
+                        )}
+                        {nodeType === 'client' && (
+                            <ClientNodeConfig
+                                nodeName={nodeName}
+                                nodeRestField={nodeRestField}
+                            />
+                        )}
+
+                        {/* 删除按钮 */}
                         <Button
                             type="text"
                             danger
@@ -710,25 +717,13 @@ const EnvironmentCreateForm = () => {
                                 onRemove();
                             }}
                             size="small"
+                            style={{ marginLeft: 8 }}
                         />
                     </Space>
-
-                    {nodeType === 'storage' && (
-                        <StorageNodeConfig
-                            nodeName={nodeName}
-                            nodeRestField={nodeRestField}
-                            businessType={businessType}
-                            vbsSeparateDeploy={vbsSeparateDeploy}
-                            form={form}
-                            clusterName={clusterName}
-                        />
-                    )}
-                    {nodeType === 'client' && <ClientNodeConfig nodeName={nodeName} nodeRestField={nodeRestField} />}
                 </Space>
             </div>
         );
     });
-
     // 硬盘项组件
     // 硬盘项组件
     const DiskItem = React.memo(({ diskName, diskRestField, onRemove, enableMetadata, enableReplication }) => {
@@ -1180,7 +1175,7 @@ const EnvironmentCreateForm = () => {
                 <ClusterHeader
                     clusterIndex={name + 1}
                     stats={nodeStats[name] || { storageCount: 0, clientCount: 0 }}
-                    onRemove={onRemoveCluster}
+                    onRemove={() => onRemoveCluster(name)}  // 确保正确传递name参数
                 />
 
                 <ClusterBasicInfo name={name} restField={restField} businessType={businessType} />
