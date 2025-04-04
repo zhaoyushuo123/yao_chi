@@ -684,8 +684,8 @@ const EnvironmentCreateForm = () => {
         return (
             <div style={{ marginBottom: 8, padding: 8, background: '#f5f5f5', borderRadius: 4 }}>
                 <Row gutter={16} align="middle">
-                    {/* 节点大类 */}
-                    <Col span={6}>
+                    {/* 节点大类 - 所有节点类型共有 */}
+                    <Col span={5}>
                         <Form.Item
                             {...nodeRestField}
                             name={[nodeName, 'nodeType']}
@@ -706,8 +706,8 @@ const EnvironmentCreateForm = () => {
 
                     {nodeType === 'storage' && (
                         <>
-                            {/* 存储节点角色 */}
-                            <Col span={6}>
+                            {/* 存储节点角色 - 加长宽度 */}
+                            <Col span={8}>
                                 <Form.Item
                                     {...nodeRestField}
                                     name={[nodeName, 'nodeRole']}
@@ -716,7 +716,10 @@ const EnvironmentCreateForm = () => {
                                     label="节点角色"
                                     labelCol={{ span: 24 }}
                                 >
-                                    <Select placeholder="选择节点角色">
+                                    <Select
+                                        placeholder="选择节点角色"
+                                        style={{ width: '100%' }}
+                                    >
                                         {getNodeRoleOptions(businessType, vbsSeparateDeploy)}
                                     </Select>
                                 </Form.Item>
@@ -744,7 +747,7 @@ const EnvironmentCreateForm = () => {
 
                     {nodeType === 'client' && (
                         <>
-                            {/* 客户端服务选择 - 优化布局 */}
+                            {/* 客户端业务服务 - 紧凑排列 */}
                             <Col span={10}>
                                 <Form.Item
                                     {...nodeRestField}
@@ -754,19 +757,28 @@ const EnvironmentCreateForm = () => {
                                     label="业务服务"
                                     labelCol={{ span: 24 }}
                                 >
-                                    <Checkbox.Group
-                                        options={[
-                                            { label: 'NFS', value: 'nfs' },
-                                            { label: 'OBS', value: 'obs' },
-                                            { label: 'DPC', value: 'dpc' },
-                                            { label: 'FI', value: 'fi' }
-                                        ]}
-                                        style={{ display: 'flex', justifyContent: 'space-between' }}
-                                    />
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        width: '100%',
+                                        gap: '4px' // 缩小选项间距
+                                    }}>
+                                        <Checkbox value="nfs">NFS</Checkbox>
+                                        <Checkbox value="obs">OBS</Checkbox>
+                                        <Checkbox value="dpc">DPC</Checkbox>
+                                        <Checkbox value="fi">FI</Checkbox>
+                                        <Checkbox value="hdfs_fi">
+                                            <span>HDFS_FI</span>
+                                            <Tooltip title="HDFS_FI部署时，即使勾选了NFS OBS或DPC，也只有第三个FI客户端提供NFS OBS DPC协议">
+                                                <QuestionCircleOutlined style={{ marginLeft: 4 }} />
+                                            </Tooltip>
+                                        </Checkbox>
+                                    </div>
                                 </Form.Item>
                             </Col>
-                            {/* 客户端节点数量 - 与存储节点数量对齐 */}
-                            <Col span={3}>
+                            {/* 客户端节点数量 - 与存储节点数量严格对齐 */}
+                            <Col span={5}>
                                 <Form.Item
                                     {...nodeRestField}
                                     name={[nodeName, 'nodeCount']}
@@ -786,21 +798,19 @@ const EnvironmentCreateForm = () => {
                         </>
                     )}
 
-                    {/* 删除按钮 */}
+                    {/* 删除按钮 - 固定宽度 */}
                     <Col span={2}>
-                        <Form.Item style={{ marginBottom: 0 }}>
-                            <Button
-                                type="text"
-                                danger
-                                icon={<MinusCircleOutlined />}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onRemove();
-                                }}
-                                size="small"
-                                style={{ marginTop: 24 }}
-                            />
-                        </Form.Item>
+                        <Button
+                            type="text"
+                            danger
+                            icon={<MinusCircleOutlined />}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onRemove();
+                            }}
+                            size="small"
+                            style={{ marginTop: 24 }}
+                        />
                     </Col>
                 </Row>
             </div>
