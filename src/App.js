@@ -178,18 +178,63 @@ const PacificEnvForm = () => {
     ];
 
     // 添加集群
+    // 修改添加集群函数
     const addCluster = () => {
         const newId = clusters.length > 0 ? Math.max(...clusters.map(c => c.id)) + 1 : 1;
-        setClusters([...clusters, {id: newId}]);
+
+        // 获取当前表单值
+        const formValues = form.getFieldsValue();
+        const newCluster = {
+            businessType: 'NAS',
+            platform: 'x86',
+            clusterRole: '默认集群', // 明确设置默认值
+            valueAddedServices: [],
+            nodes: [],
+            disks: [],
+            network: {
+                nicCount: 4,
+                nicType: 'TPC',
+                ipCount: 5
+            }
+        };
+
+        // 更新表单
+        form.setFieldsValue({
+            clusters: [...(formValues.clusters || []), newCluster]
+        });
+
+        setClusters([...clusters, { id: newId }]);
     };
 
     // 删除集群
+    // 修改删除集群函数
     const removeCluster = (id) => {
         if (clusters.length <= 1) {
             message.warning('至少需要保留一个集群');
             return;
         }
-        setClusters(clusters.filter(c => c.id !== id));
+
+        // 获取当前表单值
+        const formValues = form.getFieldsValue();
+
+        // 过滤掉要删除的集群
+        const newClusters = clusters.filter(c => c.id !== id);
+        const newClustersValues = (formValues.clusters || []).filter((_, index) => {
+            return clusters[index].id !== id;
+        });
+
+        // 更新状态和表单值
+        setClusters(newClusters);
+        form.setFieldsValue({
+            clusters: newClustersValues
+        });
+
+        // 如果删除后只剩一个集群，清除合一环境名称
+        if (newClusters.length === 1) {
+            form.setFieldsValue({
+                envName: undefined
+            });
+        }
     };
 
     // 应用典型配置
@@ -340,15 +385,27 @@ const PacificEnvForm = () => {
                                     <Form.Item
                                         name={['clusters', clusterIndex, 'businessType']}
                                         label="业务大类"
-                                        rules={[{required: true, message: '请选择业务大类'}]}
+                                        rules={[{ required: true, message: '请选择业务大类' }]}
                                     >
                                         <Select
                                             options={businessTypeOptions}
                                             onChange={(value) => {
                                                 setBusinessType(value);
-                                                // 清除不兼容的节点配置
+                                                // 获取当前所有节点
+                                                const currentNodes = form.getFieldValue(['clusters', clusterIndex, 'nodes']) || [];
+
+                                                // 过滤掉不兼容的节点
+                                                const filteredNodes = currentNodes.filter(node => {
+                                                    if (value === 'BLOCK' && node.nodeType === '客户端') return false;
+                                                    if (value === 'DME' && node.nodeType === '存储') return false;
+                                                    return true;
+                                                });
+
+                                                // 更新表单值
                                                 form.setFieldsValue({
-                                                    [`clusters.${clusterIndex}.nodes`]: []
+                                                    [`clusters.${clusterIndex}.nodes`]: filteredNodes,
+                                                    [`clusters.${clusterIndex}.clusterRole`]: undefined, // 重置集群角色
+                                                    [`clusters.${clusterIndex}.valueAddedServices`]: value === 'BLOCK' ? ['普通部署'] : [] // 设置BLOCK默认值
                                                 });
                                             }}
                                         />
@@ -367,12 +424,13 @@ const PacificEnvForm = () => {
                                     <Form.Item
                                         name={['clusters', clusterIndex, 'clusterRole']}
                                         label="集群角色"
-                                        rules={[{required: true, message: '请选择集群角色'}]}
+                                        rules={[{ required: true, message: '请选择集群角色' }]}
                                     >
                                         <Select
                                             options={getClusterRoleOptions(
-                                                form.getFieldValue(['clusters', clusterIndex, 'businessType'])
+                                                form.getFieldValue(['clusters', clusterIndex, 'businessType']) || 'NAS' // 默认NAS
                                             )}
+                                            placeholder="请选择集群角色"
                                         />
                                     </Form.Item>
                                 </Col>
