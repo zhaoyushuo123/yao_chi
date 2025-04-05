@@ -305,32 +305,89 @@ const PacificEnvForm = () => {
         event.target.value = ''; // 重置input，允许重复选择同一文件
     };
 
-    // 生成推荐命名
-    const generateRecommendedName = () => {
-        form.validateFields().then(values => {
-            // 这里实现命名逻辑
-            const names = values.clusters.map(cluster => {
-                let name = cluster.clusterName || 'cluster';
-                // 根据业务类型、角色等添加后缀
-                if (cluster.businessType) name += `_${cluster.businessType}`;
-                if (cluster.clusterRole) name += `_${cluster.clusterRole.replace(/集群/g, '')}`;
-                return name;
-            });
+    const autoFillEmptyNames = (values) => {
+        const filled = { ...values };
 
-            if (names.length > 1) {
-                const envName = values.envName || 'env';
-                message.info(`推荐环境名称: ${envName}, 集群名称: ${names.join(', ')}`);
-            } else {
-                message.info(`推荐集群名称: ${names[0]}`);
-            }
-        }).catch(() => {
-            message.error('表单验证失败，请检查输入');
-        });
+        // 填充合一环境名称
+        if (filled.clusters.length > 1 && !filled.envName) {
+            filled.envName = `pacific-${filled.clusters[0].businessType.toLowerCase()}`;
+        }
+
+        // 填充集群名称
+        filled.clusters = filled.clusters.map((cluster, index) => ({
+            ...cluster,
+            clusterName: cluster.clusterName || `${cluster.businessType}-cluster-${index + 1}`,
+        }));
+
+        return filled;
     };
 
     // 提交表单
     const onFinish = (values) => {
-        console.log('提交的表单数据:', values);
+        // 1. 自动填充未输入的字段（可选）
+        const filledValues = autoFillEmptyNames(values);
+
+        // 2. 严格校验命名规则
+        const { isValid, errors } = validateNamingStrictly(filledValues);
+        // 3. 如果校验失败，显示错误并阻止提交
+        if (!isValid) {
+            showNamingErrors(errors);
+            return; // 阻止提交
+        }
+        // 4. 校验通过，继续提交
+        submitForm(filledValues);
+    };
+    // 校验名称规则
+    const validateNamingStrictly = (values) => {
+        const errors = [];
+        let isValid = true;
+
+        // 规则1: 多集群必须填写合一环境名称
+        if (values.clusters.length > 1 && !values.envName?.trim()) {
+            errors.push('多集群环境必须填写"合一环境名称"');
+            isValid = false;
+        }
+
+        // 规则2: 集群名称必须包含业务类型和角色
+        values.clusters.forEach((cluster, index) => {
+            if (!cluster.clusterName?.trim()) {
+                errors.push(`集群 ${index + 1} 必须填写名称`);
+                isValid = false;
+            } else {
+                if (!cluster.clusterName.includes(cluster.businessType)) {
+                    errors.push(`集群 ${index + 1} 名称应包含业务类型（如 ${cluster.businessType}）`);
+                    isValid = false;
+                }
+                if (!cluster.clusterName.includes(cluster.clusterRole.replace('集群', ''))) {
+                    errors.push(`集群 ${index + 1} 名称应包含角色（如 ${cluster.clusterRole}）`);
+                    isValid = false;
+                }
+            }
+        });
+
+        return { isValid, errors };
+    };
+
+    // 显示错误提示
+    const showNamingErrors = (errors) => {
+        Modal.error({
+            title: '命名不符合规范',
+            content: (
+                <div>
+                    <p>请修改以下问题：</p>
+                    <ul style={{ color: 'red' }}>
+                        {errors.map((err, i) => (
+                            <li key={i}>{err}</li>
+                        ))}
+                    </ul>
+                </div>
+            ),
+        });
+    };
+
+    // 实际提交逻辑
+    const submitForm = (values) => {
+        console.log('提交数据:', values);
         message.success('环境创建成功');
     };
 
@@ -391,7 +448,6 @@ const PacificEnvForm = () => {
                                         <Select
                                             options={businessTypeOptions}
                                             onChange={(value) => {
-                                                // 获取当前表单值
                                                 const currentValues = form.getFieldsValue();
                                                 const currentNodes = currentValues.clusters?.[clusterIndex]?.nodes || [];
 
@@ -402,10 +458,15 @@ const PacificEnvForm = () => {
                                                     return true;
                                                 });
 
-                                                // 设置默认增值服务
+                                                // 根据业务类型设置默认增值服务
                                                 let defaultServices = [];
-                                                if (value === 'BLOCK') defaultServices = ['普通部署'];
-                                                if (value === 'DME') defaultServices = ['DME集群部署'];
+                                                if (value === 'BLOCK') {
+                                                    defaultServices = ['普通部署']; // 默认普通部署
+                                                } else if (value === 'DME') {
+                                                    defaultServices = ['DME集群部署']; // 默认DME集群部署
+                                                } else if (value === 'NAS') {
+                                                    defaultServices = []; // NAS默认无选中
+                                                }
 
                                                 // 创建新的集群数组
                                                 const newClusters = [...(currentValues.clusters || [])];
@@ -422,10 +483,8 @@ const PacificEnvForm = () => {
                                                     clusters: newClusters
                                                 });
 
-                                                // 额外触发一次渲染更新
-                                                form.setFieldsValue({
-                                                    ['clusters']: [...newClusters] // 创建新数组触发更新
-                                                });
+                                                // 更新活动业务类型状态（如果需要）
+                                                setActiveBusinessType(value);
                                             }}
                                         />
                                     </Form.Item>
@@ -461,13 +520,20 @@ const PacificEnvForm = () => {
                             >
                                 {(() => {
                                     const currentBusinessType = form.getFieldValue(['clusters', clusterIndex, 'businessType']) || 'NAS';
+                                    const options = getValueAddedServicesOptions(currentBusinessType);
+
                                     switch(currentBusinessType) {
                                         case 'NAS':
-                                            return <Checkbox.Group options={getValueAddedServicesOptions('NAS')} />;
+                                            return <Checkbox.Group options={options} />;
                                         case 'BLOCK':
-                                            return <Radio.Group options={getValueAddedServicesOptions('BLOCK')} />;
                                         case 'DME':
-                                            return <Radio.Group options={getValueAddedServicesOptions('DME')} />;
+                                            return (
+                                                <Radio.Group
+                                                    options={options}
+                                                    optionType="button"
+                                                    buttonStyle="solid"
+                                                />
+                                            );
                                         default:
                                             return null;
                                     }
@@ -802,12 +868,6 @@ const PacificEnvForm = () => {
                             提交
                         </Button>
 
-                        <Button
-                            onClick={generateRecommendedName}
-                            style={{marginRight: 16}}
-                        >
-                            使用推荐命名
-                        </Button>
 
                         <Button
                             onClick={exportConfig}
