@@ -1,0 +1,8 @@
+/* 卡片悬停动画 */
+.ant-card-hoverable {
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+.ant-card-hoverable:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}

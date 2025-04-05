@@ -7,6 +7,58 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 In the project directory, you can run:
 
 使用react 19.1.0  + ant 帮我写一个网页，该网页是一个表单，该表单用来创建环境；
+
+原来的页面
+src/
+├── components/
+│   ├── ClusterCard/          # 集群卡片组件
+│   │   ├── index.jsx         # 主组件
+│   │   ├── NodeForm.jsx      # 节点表单部分
+│   │   ├── DiskForm.jsx      # 硬盘表单部分
+│   │   └── NetworkForm.jsx   # 网络表单部分
+│   ├── TemplatePanel/        # 右侧模板面板
+│   └── FavoritePanel/        # 右侧收藏面板
+├── constants/
+│   ├── options.js           # 所有选项配置
+│   └── templates.js         # 模板配置
+├── hooks/
+│   ├── useCluster.ts        # 集群相关逻辑
+│   └── useNamingRules.js    # 命名规则逻辑
+└── PacificEnvForm.jsx       # 主入口组件
+
+
+现在
+src/
+├── pages/                   # 页面级组件
+│   ├── Home/                # 产品选择首页
+│   │   └── index.jsx        # 包含产品卡片导航
+│   ├── Pacific/             # Pacific产品页
+│   │   └── index.jsx        # 迁移后的原PacificEnvForm
+│   └── OtherProduct/        # 其他产品页
+│       └── index.jsx        # 占位表单框架
+├── components/              # 可复用组件
+│   ├── ProductCard/         # 产品选择卡片组件
+│   │   └── index.jsx        # 带路由跳转功能的卡片
+│   ├── ClusterCard/         # 集群表单卡片
+│   │   ├── index.jsx        # 主容器
+│   │   ├── NodeForm.jsx     # 节点配置表单
+│   │   ├── DiskForm.jsx     # 磁盘配置表单
+│   │   └── NetworkForm.jsx  # 网络配置表单
+│   ├── TemplatePanel/       # 右侧模板面板
+│   │   └── index.jsx        # 典型配置展示
+│   └── FavoritePanel/       # 右侧收藏面板
+│       └── index.jsx        # 收藏管理功能
+├── constants/               # 配置常量
+│   ├── options.js           # 表单选项配置
+│   ├── templates.js         # 模板数据
+│   └── products.js          # 产品列表配置
+├── hooks/                   # 自定义Hook
+│   ├── useCluster.ts        # 集群状态逻辑
+│   ├── useNamingRules.js    # 命名校验逻辑
+│   └── useNavigateCompat.js # 路由导航兼容Hook
+├── App.jsx                  # 主路由配置
+└── index.jsx                # 应用入口
+
 下面是功能描述：
 1. 在网页左边是表单；在网页右边有三个模块"典型配置“，"用户收藏配置"，"典型配置描述"
 2. 当用户点击"典型配置"时，会展示相应的"典型配置描述"，用户可以收藏自己当前的表单填写数据，用户也可以导入或者导出表单
