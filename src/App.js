@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
     Form,
     Input,
@@ -16,7 +16,7 @@ import {
 } from 'antd';
 import {PlusOutlined, MinusOutlined, StarOutlined, StarFilled, DeleteOutlined} from '@ant-design/icons';
 
-const { Panel } = Collapse;
+const {Panel} = Collapse;
 
 // 典型配置数据
 const TEMPLATE_CONFIGS = {
@@ -30,11 +30,11 @@ const TEMPLATE_CONFIGS = {
                 clusterRole: '默认集群',
                 valueAddedServices: ['开启元数据服务'],
                 nodes: [
-                    { nodeType: '存储', storageRole: 'FSM', nodeCount: 3, storageImage: 'euler9' },
-                    { nodeType: '客户端', businessServices: ['NFS'], nodeCount: 1, clientImage: 'centos77' }
+                    {nodeType: '存储', storageRole: 'FSM', nodeCount: 3, storageImage: 'euler9'},
+                    {nodeType: '客户端', businessServices: ['NFS'], nodeCount: 1, clientImage: 'centos77'}
                 ],
                 disks: [
-                    { diskType: 'SSD', diskSize: 80, diskCount: 6 }
+                    {diskType: 'SSD', diskSize: 80, diskCount: 6}
                 ],
                 network: {
                     nicCount: 4,
@@ -49,7 +49,7 @@ const TEMPLATE_CONFIGS = {
 
 const PacificEnvForm = () => {
     const [form] = Form.useForm();
-    const [clusters, setClusters] = useState([{ id: 1 }]);
+    const [clusters, setClusters] = useState([{id: 1}]);
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [templateDescription, setTemplateDescription] = useState('');
     const [favorites, setFavorites] = useState([]);
@@ -57,36 +57,36 @@ const PacificEnvForm = () => {
 
     // 业务大类选项
     const businessTypeOptions = [
-        { label: 'NAS', value: 'NAS' },
-        { label: 'BLOCK', value: 'BLOCK' },
-        { label: 'DME', value: 'DME' }
+        {label: 'NAS', value: 'NAS'},
+        {label: 'BLOCK', value: 'BLOCK'},
+        {label: 'DME', value: 'DME'}
     ];
 
     // 平台选项
     const platformOptions = [
-        { label: 'x86', value: 'x86' },
-        { label: 'arm', value: 'arm' }
+        {label: 'x86', value: 'x86'},
+        {label: 'arm', value: 'arm'}
     ];
 
     // 根据业务大类获取集群角色选项
     const getClusterRoleOptions = (type) => {
-        switch(type) {
+        switch (type) {
             case 'NAS':
                 return [
-                    { label: '默认集群', value: '默认集群' },
-                    { label: '复制集群', value: '复制集群' },
-                    { label: '9000纳管本端集群', value: '9000纳管本端集群' },
-                    { label: '9000纳管远端集群', value: '9000纳管远端集群' }
+                    {label: '默认集群', value: '默认集群'},
+                    {label: '复制集群', value: '复制集群'},
+                    {label: '9000纳管本端集群', value: '9000纳管本端集群'},
+                    {label: '9000纳管远端集群', value: '9000纳管远端集群'}
                 ];
             case 'BLOCK':
                 return [
-                    { label: '默认集群', value: '默认集群' },
-                    { label: '复制集群', value: '复制集群' },
-                    { label: 'cps集群', value: 'cps集群' }
+                    {label: '默认集群', value: '默认集群'},
+                    {label: '复制集群', value: '复制集群'},
+                    {label: 'cps集群', value: 'cps集群'}
                 ];
             case 'DME':
                 return [
-                    { label: '默认集群', value: '默认集群' }
+                    {label: '默认集群', value: '默认集群'}
                 ];
             default:
                 return [];
@@ -95,23 +95,23 @@ const PacificEnvForm = () => {
 
     // 根据业务大类获取增值服务选项
     const getValueAddedServicesOptions = (type) => {
-        switch(type) {
+        switch (type) {
             case 'NAS':
                 return [
-                    { label: '开启元数据服务', value: '开启元数据服务' },
-                    { label: '开启复制集群服务', value: '开启复制集群服务' },
-                    { label: '开启分级服务', value: '开启分级服务' },
-                    { label: '开启dpc docker多集群服务', value: '开启dpc docker多集群服务' }
+                    {label: '开启元数据服务', value: '开启元数据服务'},
+                    {label: '开启复制集群服务', value: '开启复制集群服务'},
+                    {label: '开启分级服务', value: '开启分级服务'},
+                    {label: '开启dpc docker多集群服务', value: '开启dpc docker多集群服务'}
                 ];
             case 'BLOCK':
                 return [
-                    { label: '普通部署', value: '普通部署' },
-                    { label: 'VBS分离部署', value: 'VBS分离部署' }
+                    {label: '普通部署', value: '普通部署'},
+                    {label: 'VBS分离部署', value: 'VBS分离部署'}
                 ];
             case 'DME':
                 return [
-                    { label: 'DME集群部署', value: 'DME集群部署' },
-                    { label: '单DME', value: '单DME' }
+                    {label: 'DME集群部署', value: 'DME集群部署'},
+                    {label: '单DME', value: '单DME'}
                 ];
             default:
                 return [];
@@ -122,10 +122,10 @@ const PacificEnvForm = () => {
     const nodeTypeOptions = (businessType) => {
         const options = [];
         if (businessType !== 'DME') {
-            options.push({ label: '存储', value: '存储' });
+            options.push({label: '存储', value: '存储'});
         }
         if (businessType !== 'BLOCK') {
-            options.push({ label: '客户端', value: '客户端' });
+            options.push({label: '客户端', value: '客户端'});
         }
         return options;
     };
@@ -133,54 +133,54 @@ const PacificEnvForm = () => {
     // 存储节点角色选项
     const storageRoleOptions = (businessType) => {
         const options = [
-            { label: 'FSM', value: 'FSM' },
-            { label: 'FSA', value: 'FSA' }
+            {label: 'FSM', value: 'FSM'},
+            {label: 'FSA', value: 'FSA'}
         ];
         if (businessType === 'BLOCK') {
-            options.push({ label: 'VBS', value: 'VBS' });
+            options.push({label: 'VBS', value: 'VBS'});
         }
         return options;
     };
 
     // 业务服务选项
     const businessServiceOptions = [
-        { label: 'NFS', value: 'NFS' },
-        { label: 'OBS', value: 'OBS' },
-        { label: 'DPC', value: 'DPC' },
-        { label: 'FI', value: 'FI' },
-        { label: 'HDFS_FI', value: 'HDFS_FI' }
+        {label: 'NFS', value: 'NFS'},
+        {label: 'OBS', value: 'OBS'},
+        {label: 'DPC', value: 'DPC'},
+        {label: 'FI', value: 'FI'},
+        {label: 'HDFS_FI', value: 'HDFS_FI'}
     ];
 
     // 客户端镜像选项
     const clientImageOptions = [
-        { label: 'centos77', value: 'centos77' },
-        { label: 'ubuntu', value: 'ubuntu' },
-        { label: 'euler9', value: 'euler9' }
+        {label: 'centos77', value: 'centos77'},
+        {label: 'ubuntu', value: 'ubuntu'},
+        {label: 'euler9', value: 'euler9'}
     ];
 
     // 存储镜像选项
     const storageImageOptions = [
-        { label: 'euler9', value: 'euler9' },
-        { label: 'euler10', value: 'euler10' },
-        { label: 'euler11', value: 'euler11' }
+        {label: 'euler9', value: 'euler9'},
+        {label: 'euler10', value: 'euler10'},
+        {label: 'euler11', value: 'euler11'}
     ];
 
     // 硬盘类型选项
     const diskTypeOptions = [
-        { label: 'SSD', value: 'SSD' },
-        { label: 'HDD', value: 'HDD' }
+        {label: 'SSD', value: 'SSD'},
+        {label: 'HDD', value: 'HDD'}
     ];
 
     // 网卡类型选项
     const nicTypeOptions = [
-        { label: 'TPC', value: 'TPC' },
-        { label: 'ROCE', value: 'ROCE' }
+        {label: 'TPC', value: 'TPC'},
+        {label: 'ROCE', value: 'ROCE'}
     ];
 
     // 添加集群
     const addCluster = () => {
         const newId = clusters.length > 0 ? Math.max(...clusters.map(c => c.id)) + 1 : 1;
-        setClusters([...clusters, { id: newId }]);
+        setClusters([...clusters, {id: newId}]);
     };
 
     // 删除集群
@@ -199,7 +199,7 @@ const PacificEnvForm = () => {
             setSelectedTemplate(templateName);
             setTemplateDescription(template.description);
             form.setFieldsValue(template.config);
-            setClusters(template.config.clusters.map((c, i) => ({ id: i + 1 })));
+            setClusters(template.config.clusters.map((c, i) => ({id: i + 1})));
         }
     };
     const [favoriteName, setFavoriteName] = useState('');
@@ -216,7 +216,7 @@ const PacificEnvForm = () => {
     // 应用收藏配置
     const applyFavorite = (favorite) => {
         form.setFieldsValue(favorite.config);
-        setClusters(favorite.config.clusters.map((c, i) => ({ id: i + 1 })));
+        setClusters(favorite.config.clusters.map((c, i) => ({id: i + 1})));
         setSelectedTemplate(null);
         setTemplateDescription(`用户收藏: ${favorite.name}`);
     };
@@ -225,7 +225,7 @@ const PacificEnvForm = () => {
     const exportConfig = () => {
         form.validateFields().then(values => {
             const dataStr = JSON.stringify(values, null, 2);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
 
             const exportFileDefaultName = 'pacific-config.json';
 
@@ -248,7 +248,7 @@ const PacificEnvForm = () => {
             try {
                 const config = JSON.parse(e.target.result);
                 form.setFieldsValue(config);
-                setClusters(config.clusters.map((c, i) => ({ id: i + 1 })));
+                setClusters(config.clusters.map((c, i) => ({id: i + 1})));
                 setSelectedTemplate(null);
                 setTemplateDescription('导入的配置');
                 message.success('配置导入成功');
@@ -320,20 +320,19 @@ const PacificEnvForm = () => {
                             extra={
                                 <Button
                                     danger
-                                    icon={<MinusOutlined />}
+                                    icon={<MinusOutlined/>}
                                     onClick={() => removeCluster(cluster.id)}
                                 />
                             }
-                            style={{ marginBottom: 16 }}
+                            style={{marginBottom: 16}}
                         >
                             <Form.Item
                                 name={['clusters', clusterIndex, 'clusterName']}
                                 label="集群名称"
-                                rules={[{ required: true, message: '请输入集群名称' }]}
+                                rules={[{required: true, message: '请输入集群名称'}]}
                             >
-                                <Input placeholder="请输入集群名称" />
+                                <Input placeholder="请输入集群名称"/>
                             </Form.Item>
-
 
 
                             <Row gutter={16}>
@@ -341,7 +340,7 @@ const PacificEnvForm = () => {
                                     <Form.Item
                                         name={['clusters', clusterIndex, 'businessType']}
                                         label="业务大类"
-                                        rules={[{ required: true, message: '请选择业务大类' }]}
+                                        rules={[{required: true, message: '请选择业务大类'}]}
                                     >
                                         <Select
                                             options={businessTypeOptions}
@@ -359,16 +358,16 @@ const PacificEnvForm = () => {
                                     <Form.Item
                                         name={['clusters', clusterIndex, 'platform']}
                                         label="平台"
-                                        rules={[{ required: true, message: '请选择平台' }]}
+                                        rules={[{required: true, message: '请选择平台'}]}
                                     >
-                                        <Select options={platformOptions} />
+                                        <Select options={platformOptions}/>
                                     </Form.Item>
                                 </Col>
                                 <Col span={8}>
                                     <Form.Item
                                         name={['clusters', clusterIndex, 'clusterRole']}
                                         label="集群角色"
-                                        rules={[{ required: true, message: '请选择集群角色' }]}
+                                        rules={[{required: true, message: '请选择集群角色'}]}
                                     >
                                         <Select
                                             options={getClusterRoleOptions(
@@ -385,7 +384,7 @@ const PacificEnvForm = () => {
                                 label="增值服务"
                             >
                                 {businessType === 'NAS' ? (
-                                    <Checkbox.Group options={getValueAddedServicesOptions('NAS')} />
+                                    <Checkbox.Group options={getValueAddedServicesOptions('NAS')}/>
                                 ) : businessType === 'BLOCK' ? (
                                     <Radio.Group
                                         options={getValueAddedServicesOptions('BLOCK')}
@@ -399,132 +398,170 @@ const PacificEnvForm = () => {
                                 )}
                             </Form.Item>
 
-                            {/* 节点信息 */}
                             <Form.List name={['clusters', clusterIndex, 'nodes']}>
-                                {(fields, { add, remove }) => (
+                                {(fields, {add, remove}) => (
                                     <div>
                                         <Divider orientation="left">节点信息</Divider>
-                                        {fields.map((field, index) => (
-                                            <div key={field.key} style={{ marginBottom: 16, padding: 16, border: '1px solid #d9d9d9', borderRadius: 4 }}>
-                                                <Row gutter={16}>
-                                                    <Col span={6}>
-                                                        <Form.Item
-                                                            {...field}
-                                                            name={[field.name, 'nodeType']}
-                                                            label="节点大类"
-                                                            rules={[{ required: true, message: '请选择节点大类' }]}
-                                                        >
-                                                            <Select
-                                                                options={nodeTypeOptions(
-                                                                    form.getFieldValue(['clusters', clusterIndex, 'businessType'])
-                                                                )}
-                                                                onChange={(value) => {
-                                                                    // 切换节点类型时重置相关字段
-                                                                    const nodes = form.getFieldValue(['clusters', clusterIndex, 'nodes']);
-                                                                    nodes[field.name] = {
-                                                                        ...nodes[field.name],
-                                                                        nodeType: value,
-                                                                        ...(value === '存储' ? {
-                                                                            businessServices: undefined,
-                                                                            clientImage: undefined
-                                                                        } : {
-                                                                            storageRole: undefined,
-                                                                            storageImage: undefined
-                                                                        })
-                                                                    };
-                                                                    form.setFieldsValue({
-                                                                        [`clusters.${clusterIndex}.nodes`]: nodes
-                                                                    });
-                                                                }}
+                                        {fields.map((field, index) => {
+                                            const nodeType = form.getFieldValue(['clusters', clusterIndex, 'nodes', index, 'nodeType']);
+                                            return (
+                                                <div key={field.key} style={{
+                                                    marginBottom: 16,
+                                                    padding: 16,
+                                                    border: '1px solid #d9d9d9',
+                                                    borderRadius: 4
+                                                }}>
+                                                    <Row gutter={16} align="middle">
+                                                        {/* 节点大类选择 */}
+                                                        <Col span={nodeType ? 3 : 16}>  {/* 未选择类型时占更多空间 */}
+                                                            <Form.Item
+                                                                {...field}
+                                                                name={[field.name, 'nodeType']}
+                                                                label="节点大类"
+                                                                rules={[{required: true, message: '请选择节点大类'}]}
+                                                                style={{marginBottom: 0}}
+                                                            >
+                                                                <Select
+                                                                    options={nodeTypeOptions(
+                                                                        form.getFieldValue(['clusters', clusterIndex, 'businessType'])
+                                                                    )}
+                                                                    onChange={(value) => {
+                                                                        const nodes = form.getFieldValue(['clusters', clusterIndex, 'nodes']);
+                                                                        nodes[field.name] = {
+                                                                            ...nodes[field.name],
+                                                                            nodeType: value,
+                                                                            ...(value === '存储' ? {
+                                                                                businessServices: undefined,
+                                                                                clientImage: undefined
+                                                                            } : {
+                                                                                storageRole: undefined,
+                                                                                storageImage: undefined
+                                                                            })
+                                                                        };
+                                                                        form.setFieldsValue({
+                                                                            [`clusters.${clusterIndex}.nodes`]: nodes
+                                                                        });
+                                                                    }}
+                                                                />
+                                                            </Form.Item>
+                                                        </Col>
+
+                                                        {/* 存储节点配置 */}
+                                                        {nodeType === '存储' && (
+                                                            <>
+                                                                <Col span={10}>
+                                                                    <Form.Item
+                                                                        {...field}
+                                                                        name={[field.name, 'storageRole']}
+                                                                        label="存储节点角色"
+                                                                        rules={[{
+                                                                            required: true,
+                                                                            message: '请选择存储节点角色'
+                                                                        }]}
+                                                                        style={{marginBottom: 0}}
+                                                                    >
+                                                                        <Select
+                                                                            options={storageRoleOptions(
+                                                                                form.getFieldValue(['clusters', clusterIndex, 'businessType'])
+                                                                            )}
+                                                                            style={{width: '100%'}}
+                                                                        />
+                                                                    </Form.Item>
+                                                                </Col>
+                                                                <Col span={6}>
+                                                                    <Form.Item
+                                                                        {...field}
+                                                                        name={[field.name, 'storageImage']}
+                                                                        label="存储镜像"
+                                                                        initialValue="euler9"
+                                                                        style={{marginBottom: 0}}
+                                                                    >
+                                                                        <Select options={storageImageOptions}
+                                                                                style={{width: '100%'}}/>
+                                                                    </Form.Item>
+                                                                </Col>
+                                                            </>
+                                                        )}
+
+                                                        {/* 客户端节点配置 */}
+                                                        {nodeType === '客户端' && (
+                                                            <>
+                                                                <Col span={10}>  {/* 从10调整为8，与存储节点角色一致 */}
+                                                                    <Form.Item
+                                                                        {...field}
+                                                                        name={[field.name, 'businessServices']}
+                                                                        label="业务服务"
+                                                                        rules={[{ required: true, message: '请选择业务服务' }]}
+                                                                        style={{ marginBottom: 0 }}
+                                                                    >
+                                                                        <Select
+                                                                            mode="multiple"
+                                                                            placeholder="请选择业务服务"
+                                                                            style={{ width: '100%' }}
+                                                                            options={businessServiceOptions}
+                                                                        />
+                                                                    </Form.Item>
+                                                                </Col>
+                                                                <Col span={6}>
+                                                                    <Form.Item
+                                                                        {...field}
+                                                                        name={[field.name, 'clientImage']}
+                                                                        label="客户端镜像"
+                                                                        initialValue="centos77"
+                                                                        style={{ marginBottom: 0 }}
+                                                                    >
+                                                                        <Select
+                                                                            options={clientImageOptions}
+                                                                            style={{ width: '100%' }}
+                                                                            placeholder="选择镜像"
+                                                                        />
+                                                                    </Form.Item>
+                                                                </Col>
+                                                            </>
+                                                        )}
+
+                                                        {/* 节点数量 (只在选择了节点大类后显示) */}
+                                                        {nodeType && (
+                                                            <Col span={3}>
+                                                                <Form.Item
+                                                                    {...field}
+                                                                    name={[field.name, 'nodeCount']}
+                                                                    label="节点数量"
+                                                                    rules={[{
+                                                                        required: true,
+                                                                        message: '请输入节点数量'
+                                                                    }]}
+                                                                    style={{marginBottom: 0}}
+                                                                >
+                                                                    <InputNumber
+                                                                        min={1}
+                                                                        style={{width: '100%'}}
+                                                                        placeholder="数量"
+                                                                    />
+                                                                </Form.Item>
+                                                            </Col>
+                                                        )}
+
+                                                        {/* 删除按钮 */}
+                                                        <Col span={2}>
+                                                            <Button
+                                                                danger
+                                                                icon={<MinusOutlined/>}
+                                                                onClick={() => remove(field.name)}
+                                                                style={{marginTop: nodeType ? 0 : 30}}
                                                             />
-                                                        </Form.Item>
-                                                    </Col>
+                                                        </Col>
+                                                    </Row>
 
-                                                    {form.getFieldValue(['clusters', clusterIndex, 'nodes', index, 'nodeType']) === '存储' ? (
-                                                        <>
-                                                            <Col span={6}>
-                                                                <Form.Item
-                                                                    {...field}
-                                                                    name={[field.name, 'storageRole']}
-                                                                    label="存储节点角色"
-                                                                    rules={[{ required: true, message: '请选择存储节点角色' }]}
-                                                                >
-                                                                    <Select
-                                                                        options={storageRoleOptions(
-                                                                            form.getFieldValue(['clusters', clusterIndex, 'businessType'])
-                                                                        )}
-                                                                    />
-                                                                </Form.Item>
-                                                            </Col>
-                                                            <Col span={6}>
-                                                                <Form.Item
-                                                                    {...field}
-                                                                    name={[field.name, 'storageImage']}
-                                                                    label="存储镜像"
-                                                                    initialValue="euler9"
-                                                                >
-                                                                    <Select options={storageImageOptions} />
-                                                                </Form.Item>
-                                                            </Col>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Col span={12}>
-                                                                <Form.Item
-                                                                    {...field}
-                                                                    name={[field.name, 'businessServices']}
-                                                                    label="业务服务"
-                                                                    rules={[{ required: true, message: '请选择业务服务' }]}
-                                                                    style={{ marginBottom: 0 }}
-                                                                >
-                                                                    <Checkbox.Group
-                                                                        options={businessServiceOptions}
-                                                                        style={{ lineHeight: '32px' }}
-                                                                    />
-                                                                </Form.Item>
-                                                            </Col>
-                                                            <Col span={6}>
-                                                                <Form.Item
-                                                                    {...field}
-                                                                    name={[field.name, 'clientImage']}
-                                                                    label=" "
-                                                                    initialValue="centos77"
-                                                                    style={{ marginTop: 24 }}
-                                                                >
-                                                                    <Select
-                                                                        options={clientImageOptions}
-                                                                        style={{ width: '100%' }}
-                                                                    />
-                                                                </Form.Item>
-                                                            </Col>
-                                                        </>
-                                                    )}
 
-                                                    <Col span={6}>
-                                                        <Form.Item
-                                                            {...field}
-                                                            name={[field.name, 'nodeCount']}
-                                                            label="节点数量"
-                                                            rules={[{ required: true, message: '请输入节点数量' }]}
-                                                        >
-                                                            <InputNumber min={1} style={{ width: '100%' }} />
-                                                        </Form.Item>
-                                                    </Col>
-                                                </Row>
-
-                                                <Button
-                                                    danger
-                                                    icon={<MinusOutlined />}
-                                                    onClick={() => remove(field.name)}
-                                                    style={{ float: 'right' }}
-                                                />
-                                            </div>
-                                        ))}
+                                                </div>
+                                            );
+                                        })}
 
                                         <Button
                                             type="dashed"
-                                            onClick={() => add()}
-                                            icon={<PlusOutlined />}
+                                            onClick={() => add({})}
+                                            icon={<PlusOutlined/>}
                                         >
                                             添加节点
                                         </Button>
@@ -537,11 +574,16 @@ const PacificEnvForm = () => {
                                 node => node?.nodeType === '存储'
                             ) && (
                                 <Form.List name={['clusters', clusterIndex, 'disks']}>
-                                    {(fields, { add, remove }) => (
+                                    {(fields, {add, remove}) => (
                                         <div>
                                             <Divider orientation="left">存储硬盘信息</Divider>
                                             {fields.map((field, index) => (
-                                                <div key={field.key} style={{ marginBottom: 16, padding: 16, border: '1px solid #d9d9d9', borderRadius: 4 }}>
+                                                <div key={field.key} style={{
+                                                    marginBottom: 16,
+                                                    padding: 16,
+                                                    border: '1px solid #d9d9d9',
+                                                    borderRadius: 4
+                                                }}>
                                                     <Row gutter={16}>
                                                         <Col span={8}>
                                                             <Form.Item
@@ -550,7 +592,7 @@ const PacificEnvForm = () => {
                                                                 label="硬盘类型"
                                                                 initialValue="SSD"
                                                             >
-                                                                <Select options={diskTypeOptions} />
+                                                                <Select options={diskTypeOptions}/>
                                                             </Form.Item>
                                                         </Col>
                                                         <Col span={8}>
@@ -560,7 +602,7 @@ const PacificEnvForm = () => {
                                                                 label="硬盘容量(GB)"
                                                                 initialValue={80}
                                                             >
-                                                                <InputNumber min={1} style={{ width: '100%' }} />
+                                                                <InputNumber min={1} style={{width: '100%'}}/>
                                                             </Form.Item>
                                                         </Col>
                                                         <Col span={8}>
@@ -570,8 +612,8 @@ const PacificEnvForm = () => {
                                                                 label="硬盘数量"
                                                                 initialValue={4}
                                                                 rules={[
-                                                                    { required: true, message: '请输入硬盘数量' },
-                                                                    ({ getFieldValue }) => ({
+                                                                    {required: true, message: '请输入硬盘数量'},
+                                                                    ({getFieldValue}) => ({
                                                                         validator(_, value) {
                                                                             const valueAddedServices = getFieldValue(['clusters', clusterIndex, 'valueAddedServices']) || [];
                                                                             const minCount =
@@ -588,16 +630,16 @@ const PacificEnvForm = () => {
                                                                     }),
                                                                 ]}
                                                             >
-                                                                <InputNumber min={1} style={{ width: '100%' }} />
+                                                                <InputNumber min={1} style={{width: '100%'}}/>
                                                             </Form.Item>
                                                         </Col>
                                                     </Row>
 
                                                     <Button
                                                         danger
-                                                        icon={<MinusOutlined />}
+                                                        icon={<MinusOutlined/>}
                                                         onClick={() => remove(field.name)}
-                                                        style={{ float: 'right' }}
+                                                        style={{float: 'right'}}
                                                     />
                                                 </div>
                                             ))}
@@ -605,7 +647,7 @@ const PacificEnvForm = () => {
                                             <Button
                                                 type="dashed"
                                                 onClick={() => add()}
-                                                icon={<PlusOutlined />}
+                                                icon={<PlusOutlined/>}
                                             >
                                                 添加硬盘组
                                             </Button>
@@ -627,7 +669,7 @@ const PacificEnvForm = () => {
                                                 label="网卡数量"
                                                 initialValue={4}
                                             >
-                                                <InputNumber min={1} max={4} style={{ width: '100%' }} />
+                                                <InputNumber min={1} max={4} style={{width: '100%'}}/>
                                             </Form.Item>
                                         </Col>
                                         <Col span={8}>
@@ -636,7 +678,7 @@ const PacificEnvForm = () => {
                                                 label="网卡类型"
                                                 initialValue="TPC"
                                             >
-                                                <Select options={nicTypeOptions} />
+                                                <Select options={nicTypeOptions}/>
                                             </Form.Item>
                                         </Col>
                                         <Col span={8}>
@@ -645,7 +687,7 @@ const PacificEnvForm = () => {
                                                 label="业务网络IP数量"
                                                 initialValue={5}
                                             >
-                                                <InputNumber min={1} style={{ width: '100%' }} />
+                                                <InputNumber min={1} style={{width: '100%'}}/>
                                             </Form.Item>
                                         </Col>
                                     </Row>
@@ -657,50 +699,50 @@ const PacificEnvForm = () => {
                     <Button
                         type="dashed"
                         onClick={addCluster}
-                        icon={<PlusOutlined />}
-                        style={{ marginBottom: 16 }}
+                        icon={<PlusOutlined/>}
+                        style={{marginBottom: 16}}
                     >
                         添加集群
                     </Button>
 
                     {clusters.length > 1 && (
-                        <Card style={{ marginBottom: 16 }}>
+                        <Card style={{marginBottom: 16}}>
                             <Form.Item
                                 name="envName"
                                 label="合一环境名称"
-                                rules={[{ required: true, message: '请输入合一环境名称' }]}
+                                rules={[{required: true, message: '请输入合一环境名称'}]}
                             >
-                                <Input placeholder="请输入合一环境名称" />
+                                <Input placeholder="请输入合一环境名称"/>
                             </Form.Item>
                         </Card>
                     )}
 
-                    <div style={{ textAlign: 'center', marginTop: 24 }}>
+                    <div style={{textAlign: 'center', marginTop: 24}}>
                         <Button
                             type="primary"
                             htmlType="submit"
-                            style={{ marginRight: 16 }}
+                            style={{marginRight: 16}}
                         >
                             提交
                         </Button>
 
                         <Button
                             onClick={generateRecommendedName}
-                            style={{ marginRight: 16 }}
+                            style={{marginRight: 16}}
                         >
                             使用推荐命名
                         </Button>
 
                         <Button
                             onClick={exportConfig}
-                            style={{ marginRight: 16 }}
+                            style={{marginRight: 16}}
                         >
                             导出配置
                         </Button>
 
                         {/* 修改这部分代码 */}
-                        <Button style={{ marginRight: 16 }}>
-                            <label htmlFor="file-upload" style={{ cursor: 'pointer' }}>
+                        <Button style={{marginRight: 16}}>
+                            <label htmlFor="file-upload" style={{cursor: 'pointer'}}>
                                 导入配置
                             </label>
                             <input
@@ -708,7 +750,7 @@ const PacificEnvForm = () => {
                                 type="file"
                                 accept=".json"
                                 onChange={importConfig}
-                                style={{ display: 'none' }}
+                                style={{display: 'none'}}
                             />
                         </Button>
                     </div>
@@ -717,8 +759,8 @@ const PacificEnvForm = () => {
 
             {/* 右侧面板 */}
             <Col span={8}>
-                <Card title="典型配置" style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <Card title="典型配置" style={{marginBottom: 16}}>
+                    <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
                         {Object.keys(TEMPLATE_CONFIGS).map(key => (
                             <Button
                                 key={key}
@@ -731,11 +773,11 @@ const PacificEnvForm = () => {
                     </div>
                 </Card>
 
-                <Card title="用户收藏配置" style={{ marginBottom: 16 }}>
+                <Card title="用户收藏配置" style={{marginBottom: 16}}>
                     {favorites.length === 0 ? (
                         <p>暂无收藏</p>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
                             {favorites.map((fav, index) => (
                                 <div
                                     key={index}
@@ -760,7 +802,7 @@ const PacificEnvForm = () => {
           </span>
                                     <Button
                                         type="text"
-                                        icon={<DeleteOutlined />}
+                                        icon={<DeleteOutlined/>}
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             setFavorites(favorites.filter((_, i) => i !== index));
@@ -773,9 +815,9 @@ const PacificEnvForm = () => {
                         </div>
                     )}
                     <Button
-                        icon={<StarOutlined />}
+                        icon={<StarOutlined/>}
                         onClick={saveAsFavorite}
-                        style={{ marginTop: 16 }}
+                        style={{marginTop: 16}}
                     >
                         收藏当前配置
                     </Button>
