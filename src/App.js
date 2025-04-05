@@ -53,7 +53,7 @@ const PacificEnvForm = () => {
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [templateDescription, setTemplateDescription] = useState('');
     const [favorites, setFavorites] = useState([]);
-    const [businessType, setBusinessType] = useState('NAS');
+    const [activeBusinessType, setActiveBusinessType] = useState('NAS');
 
     // 业务大类选项
     const businessTypeOptions = [
@@ -359,6 +359,7 @@ const PacificEnvForm = () => {
                     }}
                 >
                     {clusters.map((cluster, clusterIndex) => (
+
                         <Card
                             key={cluster.id}
                             title={`集群 ${clusterIndex + 1}`}
@@ -390,22 +391,40 @@ const PacificEnvForm = () => {
                                         <Select
                                             options={businessTypeOptions}
                                             onChange={(value) => {
-                                                setBusinessType(value);
-                                                // 获取当前所有节点
-                                                const currentNodes = form.getFieldValue(['clusters', clusterIndex, 'nodes']) || [];
+                                                // 获取当前表单值
+                                                const currentValues = form.getFieldsValue();
+                                                const currentNodes = currentValues.clusters?.[clusterIndex]?.nodes || [];
 
-                                                // 过滤掉不兼容的节点
+                                                // 过滤不兼容的节点
                                                 const filteredNodes = currentNodes.filter(node => {
                                                     if (value === 'BLOCK' && node.nodeType === '客户端') return false;
                                                     if (value === 'DME' && node.nodeType === '存储') return false;
                                                     return true;
                                                 });
 
-                                                // 更新表单值
+                                                // 设置默认增值服务
+                                                let defaultServices = [];
+                                                if (value === 'BLOCK') defaultServices = ['普通部署'];
+                                                if (value === 'DME') defaultServices = ['DME集群部署'];
+
+                                                // 创建新的集群数组
+                                                const newClusters = [...(currentValues.clusters || [])];
+                                                newClusters[clusterIndex] = {
+                                                    ...newClusters[clusterIndex],
+                                                    businessType: value,
+                                                    nodes: filteredNodes,
+                                                    clusterRole: '默认集群',
+                                                    valueAddedServices: defaultServices
+                                                };
+
+                                                // 强制更新表单值
                                                 form.setFieldsValue({
-                                                    [`clusters.${clusterIndex}.nodes`]: filteredNodes,
-                                                    [`clusters.${clusterIndex}.clusterRole`]: undefined, // 重置集群角色
-                                                    [`clusters.${clusterIndex}.valueAddedServices`]: value === 'BLOCK' ? ['普通部署'] : [] // 设置BLOCK默认值
+                                                    clusters: newClusters
+                                                });
+
+                                                // 额外触发一次渲染更新
+                                                form.setFieldsValue({
+                                                    ['clusters']: [...newClusters] // 创建新数组触发更新
                                                 });
                                             }}
                                         />
@@ -436,24 +455,23 @@ const PacificEnvForm = () => {
                                 </Col>
                             </Row>
 
-                            {/* 增值服务 */}
                             <Form.Item
                                 name={['clusters', clusterIndex, 'valueAddedServices']}
                                 label="增值服务"
                             >
-                                {businessType === 'NAS' ? (
-                                    <Checkbox.Group options={getValueAddedServicesOptions('NAS')}/>
-                                ) : businessType === 'BLOCK' ? (
-                                    <Radio.Group
-                                        options={getValueAddedServicesOptions('BLOCK')}
-                                        defaultValue="普通部署"
-                                    />
-                                ) : (
-                                    <Radio.Group
-                                        options={getValueAddedServicesOptions('DME')}
-                                        defaultValue="DME集群部署"
-                                    />
-                                )}
+                                {(() => {
+                                    const currentBusinessType = form.getFieldValue(['clusters', clusterIndex, 'businessType']) || 'NAS';
+                                    switch(currentBusinessType) {
+                                        case 'NAS':
+                                            return <Checkbox.Group options={getValueAddedServicesOptions('NAS')} />;
+                                        case 'BLOCK':
+                                            return <Radio.Group options={getValueAddedServicesOptions('BLOCK')} />;
+                                        case 'DME':
+                                            return <Radio.Group options={getValueAddedServicesOptions('DME')} />;
+                                        default:
+                                            return null;
+                                    }
+                                })()}
                             </Form.Item>
 
                             <Form.List name={['clusters', clusterIndex, 'nodes']}>
