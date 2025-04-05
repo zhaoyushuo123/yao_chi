@@ -12,9 +12,9 @@ import {
     InputNumber,
     Radio,
     message,
-    Collapse
+    Collapse, Modal
 } from 'antd';
-import { PlusOutlined, MinusOutlined, StarOutlined, StarFilled } from '@ant-design/icons';
+import {PlusOutlined, MinusOutlined, StarOutlined, StarFilled, DeleteOutlined} from '@ant-design/icons';
 
 const { Panel } = Collapse;
 
@@ -202,15 +202,12 @@ const PacificEnvForm = () => {
             setClusters(template.config.clusters.map((c, i) => ({ id: i + 1 })));
         }
     };
-
+    const [favoriteName, setFavoriteName] = useState('');
+    const [isFavoriteModalVisible, setIsFavoriteModalVisible] = useState(false);
     // 收藏当前配置
     const saveAsFavorite = () => {
         form.validateFields().then(values => {
-            const favoriteName = prompt('请输入收藏名称:');
-            if (favoriteName) {
-                setFavorites([...favorites, { name: favoriteName, config: values }]);
-                message.success('配置已收藏');
-            }
+            setIsFavoriteModalVisible(true);
         }).catch(() => {
             message.error('表单验证失败，请检查输入');
         });
@@ -337,15 +334,7 @@ const PacificEnvForm = () => {
                                 <Input placeholder="请输入集群名称" />
                             </Form.Item>
 
-                            {clusters.length > 1 && (
-                                <Form.Item
-                                    name="envName"
-                                    label="合一环境名称"
-                                    rules={[{ required: true, message: '请输入合一环境名称' }]}
-                                >
-                                    <Input placeholder="请输入合一环境名称" />
-                                </Form.Item>
-                            )}
+
 
                             <Row gutter={16}>
                                 <Col span={8}>
@@ -395,9 +384,9 @@ const PacificEnvForm = () => {
                                 name={['clusters', clusterIndex, 'valueAddedServices']}
                                 label="增值服务"
                             >
-                                {form.getFieldValue(['clusters', clusterIndex, 'businessType']) === 'NAS' ? (
+                                {businessType === 'NAS' ? (
                                     <Checkbox.Group options={getValueAddedServicesOptions('NAS')} />
-                                ) : form.getFieldValue(['clusters', clusterIndex, 'businessType']) === 'BLOCK' ? (
+                                ) : businessType === 'BLOCK' ? (
                                     <Radio.Group
                                         options={getValueAddedServicesOptions('BLOCK')}
                                         defaultValue="普通部署"
@@ -429,6 +418,24 @@ const PacificEnvForm = () => {
                                                                 options={nodeTypeOptions(
                                                                     form.getFieldValue(['clusters', clusterIndex, 'businessType'])
                                                                 )}
+                                                                onChange={(value) => {
+                                                                    // 切换节点类型时重置相关字段
+                                                                    const nodes = form.getFieldValue(['clusters', clusterIndex, 'nodes']);
+                                                                    nodes[field.name] = {
+                                                                        ...nodes[field.name],
+                                                                        nodeType: value,
+                                                                        ...(value === '存储' ? {
+                                                                            businessServices: undefined,
+                                                                            clientImage: undefined
+                                                                        } : {
+                                                                            storageRole: undefined,
+                                                                            storageImage: undefined
+                                                                        })
+                                                                    };
+                                                                    form.setFieldsValue({
+                                                                        [`clusters.${clusterIndex}.nodes`]: nodes
+                                                                    });
+                                                                }}
                                                             />
                                                         </Form.Item>
                                                     </Col>
@@ -468,18 +475,26 @@ const PacificEnvForm = () => {
                                                                     name={[field.name, 'businessServices']}
                                                                     label="业务服务"
                                                                     rules={[{ required: true, message: '请选择业务服务' }]}
+                                                                    style={{ marginBottom: 0 }}
                                                                 >
-                                                                    <Checkbox.Group options={businessServiceOptions} />
+                                                                    <Checkbox.Group
+                                                                        options={businessServiceOptions}
+                                                                        style={{ lineHeight: '32px' }}
+                                                                    />
                                                                 </Form.Item>
                                                             </Col>
                                                             <Col span={6}>
                                                                 <Form.Item
                                                                     {...field}
                                                                     name={[field.name, 'clientImage']}
-                                                                    label="客户端镜像"
+                                                                    label=" "
                                                                     initialValue="centos77"
+                                                                    style={{ marginTop: 24 }}
                                                                 >
-                                                                    <Select options={clientImageOptions} />
+                                                                    <Select
+                                                                        options={clientImageOptions}
+                                                                        style={{ width: '100%' }}
+                                                                    />
                                                                 </Form.Item>
                                                             </Col>
                                                         </>
@@ -648,6 +663,18 @@ const PacificEnvForm = () => {
                         添加集群
                     </Button>
 
+                    {clusters.length > 1 && (
+                        <Card style={{ marginBottom: 16 }}>
+                            <Form.Item
+                                name="envName"
+                                label="合一环境名称"
+                                rules={[{ required: true, message: '请输入合一环境名称' }]}
+                            >
+                                <Input placeholder="请输入合一环境名称" />
+                            </Form.Item>
+                        </Card>
+                    )}
+
                     <div style={{ textAlign: 'center', marginTop: 24 }}>
                         <Button
                             type="primary"
@@ -710,20 +737,36 @@ const PacificEnvForm = () => {
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             {favorites.map((fav, index) => (
-                                <div key={index} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <div
+                                    key={index}
+                                    style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '8px 12px',
+                                        border: '1px solid #d9d9d9',
+                                        borderRadius: 4
+                                    }}
+                                >
+          <span
+              onClick={() => applyFavorite(fav)}
+              style={{
+                  flex: 1,
+                  cursor: 'pointer',
+                  padding: '4px 0'
+              }}
+          >
+            {fav.name}
+          </span>
                                     <Button
                                         type="text"
-                                        onClick={() => applyFavorite(fav)}
-                                        style={{ textAlign: 'left', flex: 1 }}
-                                    >
-                                        {fav.name}
-                                    </Button>
-                                    <Button
-                                        icon={<StarFilled style={{ color: '#ffcc00' }} />}
-                                        onClick={() => {
+                                        icon={<DeleteOutlined />}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
                                             setFavorites(favorites.filter((_, i) => i !== index));
-                                            message.success('已取消收藏');
+                                            message.success('收藏已删除');
                                         }}
+                                        danger
                                     />
                                 </div>
                             ))}
@@ -736,6 +779,30 @@ const PacificEnvForm = () => {
                     >
                         收藏当前配置
                     </Button>
+                    <Modal
+                        title="收藏当前配置"
+                        visible={isFavoriteModalVisible}
+                        onOk={() => {
+                            if (favoriteName.trim()) {
+                                setFavorites([...favorites, {
+                                    name: favoriteName,
+                                    config: form.getFieldsValue()
+                                }]);
+                                message.success('配置已收藏');
+                                setFavoriteName('');
+                                setIsFavoriteModalVisible(false);
+                            } else {
+                                message.error('请输入收藏名称');
+                            }
+                        }}
+                        onCancel={() => setIsFavoriteModalVisible(false)}
+                    >
+                        <Input
+                            placeholder="请输入收藏名称"
+                            value={favoriteName}
+                            onChange={(e) => setFavoriteName(e.target.value)}
+                        />
+                    </Modal>
                 </Card>
 
                 <Card title="典型配置描述">
